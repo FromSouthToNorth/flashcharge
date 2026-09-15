@@ -1,0 +1,1536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>Flash Charge Viz · 比亚迪闪充站数据可视化</title>
+<link rel="stylesheet" href="styles.css" />
+<script defer src="echarts.min.js"></script>
+<script defer src="china_map.js"></script>
+<script>
+  /* 头部立即发起主数据请求 —— 与 JS 下载并行，而不是等 JS 下载执行完才开始 */
+  window.__dataFetch = fetch('byd_stations_full.json');
+  window.__prevFetch = fetch('prev_day.json').catch(() => null);
+  window.__newFetch = fetch('new_today.json').catch(() => null);
+</script>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='28'%3E⚡%3C/text%3E%3C/svg%3E" />
+<style>
+  html, body { background: #0a0e17; color: #f3f4f6; font-family: ui-sans-serif, system-ui, "Microsoft YaHei", "PingFang SC", sans-serif; }
+  .card { background: #111827; border: 1px solid #1f2937; border-radius: 0.75rem; }
+  .card-amber { background: linear-gradient(135deg,#1a1208 0%,#0a0e17 100%); border-color: #f59e0b33; }
+  .card-cyan { background: linear-gradient(135deg,#082029 0%,#0a0e17 100%); border-color: #06b6d433; }
+  .card-emerald { background: linear-gradient(135deg,#07221a 0%,#0a0e17 100%); border-color: #10b98133; }
+  .card-orange { background: linear-gradient(135deg,#221608 0%,#0a0e17 100%); border-color: #f9731633; }
+  .t-amber { color: #f59e0b; } .t-cyan { color: #06b6d4; } .t-emerald { color: #10b981; } .t-orange { color: #f97316; }
+  .border-amber\/30 { border-color: #f59e0b4d; } .border-cyan\/30 { border-color: #06b6d433; }
+  .border-emerald\/30 { border-color: #10b9814d; } .border-orange\/30 { border-color: #f9731633; }
+  .btn { background: #1f2937; border: 1px solid #374151; color: #d1d5db; padding: 4px 12px; border-radius: 0.5rem; font-size: 13px; cursor: pointer; transition: all .15s; }
+  .btn:hover { background: #374151; }
+  .btn.active { background: #06b6d4; color: #fff; border-color: #06b6d4; }
+  .btn.active-amber { background: #f59e0b; color: #0a0e17; border-color: #f59e0b; }
+  .tab { padding: 8px 14px; cursor: pointer; color: #9ca3af; border-bottom: 2px solid transparent; font-size: 14px; }
+  .tab.active { color: #f59e0b; border-color: #f59e0b; }
+  .input { background: #1f2937; border: 1px solid #374151; color: #f3f4f6; padding: 8px 12px; border-radius: 0.5rem; font-size: 14px; }
+  .input:focus { outline: none; border-color: #f59e0b; }
+  select.input { cursor: pointer; }
+  .linkable { cursor: pointer; text-decoration: underline dotted rgba(255,255,255,.25); text-underline-offset: 3px; }
+  .linkable:hover { text-decoration: underline solid currentColor; filter: brightness(1.25); }
+  .district-group { margin-bottom: 14px; }
+  .district-head { position: sticky; top: 0; background: #0f1523; color: #9ca3af; font-size: 12px; padding: 6px 10px; border-left: 3px solid #f59e0b; border-radius: 4px; margin-bottom: 6px; z-index: 2; }
+  .route-step { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 0; border-bottom: 1px dashed #1f2937; }
+  .route-step:last-child { border-bottom: none; }
+  .route-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .route-empty { color: #6b7280; font-size: 13px; padding: 10px 0; }
+  .input:focus { outline: none; border-color: #06b6d4; }
+  table.tbl { width: 100%; border-collapse: collapse; }
+  .tbl th { background: #1f293780; color: #9ca3af; padding: 10px 12px; text-align: left; font-weight: 500; font-size: 13px; }
+  .tbl td { padding: 8px 12px; border-bottom: 1px solid #1f2937; font-size: 14px; }
+  .tbl th.text-center, .tbl td.text-center { text-align: center; }
+  .tbl th:first-child, .tbl td:first-child { text-align: center; }
+  .tbl tr:hover td { background: #1f293740; }
+  .medal { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; font-size: 12px; font-weight: 700; }
+  .medal-1 { background: #f59e0b; color: #0a0e17; }
+  .medal-2 { background: #cbd5e1; color: #0a0e17; }
+  .medal-3 { background: #d97706; color: #0a0e17; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500; }
+  .pill-on { background: #064e3b; color: #10b981; }
+  .pill-off { background: #7f1d1d; color: #fca5a5; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  .stat-num { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; }
+  .delta-badge { position: absolute; top: 10px; right: 10px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 9999px; line-height: 1.4; white-space: nowrap; }
+  .delta-up { color: #34d399; background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.3); }
+  .delta-down { color: #f87171; background: rgba(248,113,113,.12); border: 1px solid rgba(248,113,113,.3); }
+  .delta-flat { color: #9ca3af; background: rgba(107,114,128,.12); border: 1px solid rgba(107,114,128,.3); }
+  .modal-back { background: #1f2937cc; backdrop-filter: blur(8px); }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- 顶栏 -->
+<header class="border-b border-gray-800 sticky top-0 z-20" style="background:#0a0e17f0;backdrop-filter:blur(12px)">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">⚡</span>
+      <div>
+        <div class="text-lg font-semibold">Flash Charge Viz</div>
+        <div class="text-xs text-gray-400">比亚迪闪充站数据可视化</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-4 text-sm text-gray-400">
+      <span>数据更新: <span class="t-cyan" id="dataUpdate">2026-09-15 18:08</span></span>
+      <span class="hidden sm:inline" id="visitStats">浏览量: <span class="t-amber">--</span> · 访客: <span class="t-amber">--</span></span>
+      <a class="px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20" href="#feedback">✍️ 留言建议</a>
+      <a class="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20" href="#sponsor">☕ 支持作者</a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+<!-- 核心统计卡片：总站/总枪/高速/品牌/站中站/城市数 -->
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+  <div class="card card-amber p-4 relative"><span class="delta-badge" id="dTotal" style="display:none"></span><div class="text-xs text-gray-400">累计站点</div><div class="stat-num t-amber" id="cTotal">--</div><div class="text-xs text-gray-500 mt-1" id="cTotalSub"></div></div>
+  <div class="card card-amber p-4 relative"><span class="delta-badge" id="dGuns" style="display:none"></span><div class="text-xs text-gray-400">累计枪数</div><div class="stat-num t-amber" id="cGuns">--</div><div class="text-xs text-gray-500 mt-1" id="cGunsSub"></div></div>
+  <div class="card card-orange p-4 relative"><span class="delta-badge" id="dHw" style="display:none"></span><div class="text-xs text-gray-400">🛣️ 高速充电站</div><div class="stat-num t-orange" id="cHw">--</div><div class="text-xs text-gray-500 mt-1" id="cHwSub"></div></div>
+  <div class="card card-cyan p-4 relative"><span class="delta-badge" id="dBrand" style="display:none"></span><div class="text-xs text-gray-400">🏢 品牌充电站</div><div class="stat-num t-cyan" id="cBrand">--</div><div class="text-xs text-gray-500 mt-1" id="cBrandSub"></div></div>
+  <div class="card card-emerald p-4 relative"><span class="delta-badge" id="dInst" style="display:none"></span><div class="text-xs text-gray-400">🏛️ 站中站</div><div class="stat-num t-emerald" id="cInst">--</div><div class="text-xs text-gray-500 mt-1" id="cInstSub"></div></div>
+  <div class="card p-4 relative"><span class="delta-badge" id="dCities" style="display:none"></span><div class="text-xs text-gray-400">🌆 覆盖城市</div><div class="stat-num text-gray-100" id="cCities">--</div><div class="text-xs text-gray-500 mt-1" id="cCitiesSub"></div></div>
+</div>
+
+<!-- 地图 -->
+<div class="card p-4">
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+    <div class="flex items-center gap-2">
+      <span class="font-medium" id="mapTitle">📍 全国闪充站分布</span>
+      <div class="ml-2 flex gap-1">
+        <button class="btn active" data-maptype="scatter" onclick="setMapType(this)">散点图</button>
+        <button class="btn" data-maptype="heatmap" onclick="setMapType(this)">热力图</button>
+        <button class="btn" id="backNation" style="display:none;color:#f59e0b" onclick="backToNation()">← 返回全国</button>
+        <button class="btn" id="clearRouteBtn" style="display:none;color:#f59e0b" onclick="clearRouteOverlay()">✕ 清除规划路线</button>
+      </div>
+      <span class="text-xs text-gray-500 hidden md:inline">点击省份可下钻 · 滚轮缩放 · 拖拽平移</span>
+    </div>
+    <div class="flex gap-1">
+      <button class="btn active-amber" data-cat="all" onclick="setMapCat(this)">全部 <span class="text-xs opacity-60" id="cntAll"></span></button>
+      <button class="btn" data-cat="highway" onclick="setMapCat(this)" style="color:#f59e0b">🛣️ 高速 <span class="text-xs opacity-60" id="cntHw"></span></button>
+      <button class="btn" data-cat="brand" onclick="setMapCat(this)" style="color:#06b6d4">🏢 品牌 <span class="text-xs opacity-60" id="cntBrand"></span></button>
+      <button class="btn" data-cat="instation" onclick="setMapCat(this)" style="color:#10b981">🏛️ 站中站 <span class="text-xs opacity-60" id="cntInst"></span></button>
+    </div>
+  </div>
+  <div style="position:relative">
+    <div id="mapChart" style="width:100%;height:560px"></div>
+    <div id="mapLoading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:15px;letter-spacing:2px;background:#0a0e17;pointer-events:none">⚡ 站点数据加载中…</div>
+  </div>
+</div>
+
+<!-- 长途充电规划 -->
+<div class="card p-4 scroll-mt-20" id="route">
+  <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+    <h3 class="font-medium">🚗 长途充电规划 <span class="text-xs text-gray-500 ml-2">按续航自动推荐沿途闪充站</span></h3>
+    <div class="flex items-center gap-2 flex-wrap">
+      <label class="text-xs text-gray-400">规划策略</label>
+      <select id="routeMode" class="input" style="width:160px" onchange="if(lastRoutePlan)planRoute()">
+        <option value="highway" selected>🛣️ 少下高速（推荐）</option>
+        <option value="fewest">⚡ 充电次数最少</option>
+      </select>
+      <label class="text-xs text-gray-400 ml-2">续航里程</label>
+      <input id="routeRange" type="number" min="80" max="800" step="10" value="300" class="input" style="width:96px" />
+      <span class="text-xs text-gray-400">km</span>
+      <label class="text-xs text-gray-400 ml-2">安全余量</label>
+      <select id="routeSafety" class="input" style="width:96px">
+        <option value="0.9">10%</option>
+        <option value="0.85" selected>15%</option>
+        <option value="0.8">20%</option>
+        <option value="0.75">25%</option>
+      </select>
+      <label class="text-xs text-gray-400 ml-2">沿途范围</label>
+      <select id="routeCorridor" class="input" style="width:96px" onchange="if(lastRoutePlan)planRoute()">
+        <option value="5">±5 km</option>
+        <option value="10" selected>±10 km</option>
+        <option value="20">±20 km</option>
+        <option value="40">±40 km</option>
+      </select>
+      <label class="text-xs text-gray-400 ml-2">最大绕行</label>
+      <select id="routeMaxDetour" class="input" style="width:96px" onchange="if(lastRoutePlan)planRoute()">
+        <option value="10">10 km</option>
+        <option value="25" selected>25 km</option>
+        <option value="50">50 km</option>
+        <option value="9999">不限</option>
+      </select>
+    </div>
+  </div>
+  <div class="grid md:grid-cols-[1fr_auto_1fr_auto] gap-2 items-end mb-3">
+    <div>
+      <label class="text-xs text-gray-400 block mb-1">起点城市</label>
+      <input id="routeFrom" class="input" list="cityOptions" placeholder="如：昆明 / 昆明五华区" />
+    </div>
+    <button class="btn" onclick="swapRoute()" title="交换起终点">⇄</button>
+    <div>
+      <label class="text-xs text-gray-400 block mb-1">终点城市</label>
+      <input id="routeTo" class="input" list="cityOptions" placeholder="如：上海 / 上海浦东新区" />
+    </div>
+    <button class="btn active w-full md:w-auto" onclick="planRoute()">开始规划</button>
+  </div>
+  <datalist id="cityOptions"></datalist>
+  <div class="text-xs text-gray-500 mb-2">🚗 路径来自<b>高德驾车路线规划</b>（真实路网里程），并按道路名识别出哪些路段是<b>高速公路</b>。绕行代价按<b>站点能不能真的顺路到</b>分级：高速服务区不额外绕、高速出口站要出站、城区站要下高速进城 —— 不会再推荐高速下方根本过不去的站。<br />
+  <b class="t-amber">两种策略任选</b>（都是<b>整条路全局最优</b>，不是走一步看一步）：<b>🛣️ 少下高速</b>（默认）—— 优先在服务区／高速出口充电，<b>不追求每次跑满续航</b>，宁可多充一次也不下高速，只有续航确实不够时才下高速；<b>⚡ 充电次数最少</b> —— 总充电次数最少，代价是可能推荐需下高速的城区站。</div>
+  <div id="routeSummary" class="text-sm mb-2" style="display:none"></div>
+  <div id="routeMap" style="width:100%;height:420px;display:none"></div>
+  <div class="overflow-x-auto max-h-[420px] overflow-y-auto mt-2" id="routeTableWrap" style="display:none">
+    <table class="tbl">
+      <thead><tr><th style="width:46px">#</th><th>充电站</th><th>城市</th><th>地址</th><th class="text-center">距起点</th><th class="text-center" title="直线偏离路线的距离 / 实际要绕的往返里程">偏离 → 实绕</th><th class="text-center">可达性</th><th class="text-center">闪充枪</th><th class="text-center">空闲</th></tr></thead>
+      <tbody id="routeTbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 趋势 + 省份堆叠 -->
+<div class="grid lg:grid-cols-3 gap-4">
+  <div class="card p-4 lg:col-span-1">
+    <h3 class="font-medium mb-2">分类堆叠 · 三大类对比</h3>
+    <div id="pieChart" style="width:100%;height:360px"></div>
+  </div>
+  <div class="card p-4 lg:col-span-2">
+    <h3 class="font-medium mb-2">各省份 · 三分类堆叠</h3>
+    <div id="provChart" style="width:100%;height:600px"></div>
+  </div>
+</div>
+
+<!-- 城市排行榜 -->
+<div class="card p-4">
+  <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+    <h3 class="font-medium">🏙️ 城市排行榜 <span class="text-xs text-gray-500 ml-2">实时</span></h3>
+    <input id="citySearch" class="input" placeholder="搜索城市，如：广州 / 深圳" />
+  </div>
+  <div class="text-xs text-gray-500 mb-2">实时口径，只统计当前投运的闪充站。按总枪数排序。</div>
+  <div class="overflow-x-auto max-h-[480px] overflow-y-auto">
+    <table class="tbl">
+      <thead><tr><th style="width:50px">#</th><th>城市</th><th>省份</th><th class="text-center">高速</th><th class="text-center">品牌</th><th class="text-center">站中站</th><th class="text-center">总站</th><th class="text-center">总枪</th><th class="text-center">空闲枪</th></tr></thead>
+      <tbody id="cityTbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 省份排行榜 -->
+<div class="card p-4">
+  <h3 class="font-medium mb-3">🗺️ 省份排行榜 <span class="text-xs text-gray-500 ml-2">实时</span></h3>
+  <div class="overflow-x-auto max-h-[480px] overflow-y-auto">
+    <table class="tbl">
+      <thead><tr><th style="width:50px">#</th><th>省份</th><th class="text-center">高速</th><th class="text-center">品牌</th><th class="text-center">站中站</th><th class="text-center">总站</th><th class="text-center">总枪</th></tr></thead>
+      <tbody id="provTbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 今日新增站点 -->
+<div class="card p-4 scroll-mt-20" id="newToday">
+  <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+    <h3 class="font-medium">🆕 今日新增站点 <span class="text-xs text-gray-500 ml-2" id="newTodayBadge">加载中…</span></h3>
+    <input id="newSearch" class="input" placeholder="🔍 搜索站名 / 城市 / 地址" oninput="renderNewToday()" />
+  </div>
+  <div class="flex items-center gap-2 mb-2 flex-wrap" id="newCatFilter">
+    <button class="btn active-amber" data-ncat="all" onclick="setNewCat(this)">全部 <span class="text-xs opacity-60" id="ncAll"></span></button>
+    <button class="btn" data-ncat="highway" onclick="setNewCat(this)" style="color:#f59e0b">🛣️ 高速 <span class="text-xs opacity-60" id="ncHw"></span></button>
+    <button class="btn" data-ncat="brand" onclick="setNewCat(this)" style="color:#06b6d4">🏢 品牌 <span class="text-xs opacity-60" id="ncBrand"></span></button>
+    <button class="btn" data-ncat="instation" onclick="setNewCat(this)" style="color:#10b981">🏛️ 站中站 <span class="text-xs opacity-60" id="ncInst"></span></button>
+  </div>
+  <div class="text-xs text-gray-500 mb-2" id="newTodayDesc"></div>
+  <div class="overflow-x-auto max-h-[480px] overflow-y-auto">
+    <table class="tbl">
+      <thead><tr><th style="width:50px">#</th><th>站点名称</th><th>类型</th><th>城市</th><th>省份</th><th>地址</th><th class="text-center">闪充枪</th></tr></thead>
+      <tbody id="newTbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 三类站点详情 -->
+<div class="card p-4">
+  <div class="flex items-center justify-between gap-3 border-b border-gray-800 -mx-4 px-4 mb-3 flex-wrap">
+    <div class="flex items-center gap-4">
+      <div class="tab active" data-cat="highway" onclick="setDetailCat(this)">🛣️ 高速充电站 <span class="text-xs" id="dtCntHw"></span></div>
+      <div class="tab" data-cat="brand" onclick="setDetailCat(this)">🏢 品牌充电站 <span class="text-xs" id="dtCntBrand"></span></div>
+      <div class="tab" data-cat="instation" onclick="setDetailCat(this)">🏛️ 站中站 <span class="text-xs" id="dtCntInst"></span></div>
+    </div>
+    <input id="detailSearch" class="input mb-2" style="max-width:300px" placeholder="🔍 搜索站名 / 城市 / 地址" />
+  </div>
+  <div class="text-xs text-gray-500 mb-2" id="detailDesc"></div>
+  <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
+    <table class="tbl">
+      <thead><tr><th style="width:50px">#</th><th>站点名称</th><th>类型</th><th>城市</th><th>地址</th><th class="text-center">闪充枪</th><th class="text-center">空闲</th></tr></thead>
+      <tbody id="detailTbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 支持作者：赞赏码 -->
+<div id="sponsor" class="card p-6 scroll-mt-20">
+  <div class="grid md:grid-cols-[1fr_auto] gap-6 items-center">
+    <div>
+      <h3 class="text-lg font-semibold mb-2 t-amber">☕ 支持作者</h3>
+      <p class="text-gray-300 leading-relaxed mb-3">「如果觉得对你有帮助，请大家支持一下，是我持续更新的动力。」</p>
+      <p class="text-xs text-gray-500 mb-2">本站为个人项目，页面完全免费，数据每天凌晨自动更新。如有数据疑问、建议，或希望补充更多统计维度，欢迎联系作者。</p>
+      <div class="flex flex-wrap gap-2 text-xs text-gray-400">
+        <span class="pill" style="background:#06b6d422;color:#06b6d4">💬 每日 0:00 自动刷新</span>
+        <span class="pill" style="background:#f59e0b22;color:#f59e0b">📡 实时同步投运状态</span>
+        <span class="pill" style="background:#10b98122;color:#10b981">🗺️ 三类口径可视化</span>
+      </div>
+    </div>
+    <div class="text-center">
+      <div class="inline-block bg-white p-2 rounded-lg" style="background:#ffffff">
+        <img src="qrcode.jpg" alt="赞赏码" class="block w-44 h-44" loading="lazy" />
+      </div>
+      <div class="text-xs text-gray-500 mt-2">李帅 的赞赏码</div>
+    </div>
+  </div>
+</div>
+
+<!-- 留言建议 -->
+<div id="feedback" class="card p-6 scroll-mt-20">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <h3 class="text-lg font-semibold t-cyan">✍️ 留言建议</h3>
+    <a id="fbSubmitBtn" class="px-4 py-2 rounded-lg bg-cyan-500 text-white font-medium hover:bg-cyan-400 transition-colors" target="_blank" rel="noopener">📝 提交我的建议</a>
+  </div>
+  <p class="text-gray-300 text-sm leading-relaxed mb-1">打赏后欢迎留言，你对本站的任何建议——数据口径、功能、页面、统计维度——都可以提。</p>
+  <p class="text-xs text-gray-500 mb-4">大家的建议会实时汇总展示在下方 👇</p>
+  <div id="fbBoardWrap" class="rounded-lg border border-gray-800 overflow-hidden" style="background:#0d1320">
+    <iframe id="fbBoard" class="w-full block" style="height:520px;border:0" title="大家的建议" loading="lazy"></iframe>
+  </div>
+  <div class="text-xs text-gray-500 text-center mt-2">看板没有显示？<a id="fbBoardLink" class="t-cyan underline" target="_blank" rel="noopener">点这里在新窗口查看全部建议</a></div>
+</div>
+
+<footer class="text-center text-gray-500 text-sm py-6">充电站数据可视化 | 个人项目 · 数据来自公开渠道 · 仅供参考</footer>
+</main>
+
+<!-- 欢迎弹窗：打赏码 + 免责声明 -->
+<div id="modal" class="fixed inset-0 z-50 modal-back flex items-center justify-center">
+  <div class="card max-w-md p-6 mx-4" style="border-color:#f59e0b4d">
+    <h2 class="text-lg font-semibold mb-1 text-center">⚡ 欢迎访问 Flash Charge Viz</h2>
+    <p class="text-xs text-gray-500 text-center mb-4">本站为个人项目，数据来自公开渠道，仅供学习研究 · 如有侵权请联系删除</p>
+    <div class="flex justify-center mb-3">
+      <div class="inline-block bg-white p-2 rounded-lg">
+        <img src="qrcode.jpg" alt="赞赏码" class="block w-40 h-40" loading="lazy" />
+      </div>
+    </div>
+    <p class="text-sm text-gray-300 text-center mb-1">「如果觉得对你有帮助，请大家支持一下，是我持续更新的动力。」</p>
+    <p class="text-xs text-gray-500 text-center mb-5">扫码打赏后，可在页面底部「留言建议」区提交你的想法 ✍️</p>
+    <button class="btn active w-full" onclick="dismissWelcome()">进入网站</button>
+  </div>
+</div>
+
+<!-- 站点明细弹窗（城市排行榜数字点击 / 地图点击共用） -->
+<div id="cityModal" class="fixed inset-0 z-50 modal-back flex items-center justify-center" style="display:none" onclick="if(event.target===this)closeCityModal()">
+  <div class="card w-full mx-4 p-5" style="max-width:960px;max-height:86vh;display:flex;flex-direction:column">
+    <div class="flex items-start justify-between gap-3 mb-2">
+      <div>
+        <h3 class="font-semibold text-base" id="cityModalTitle"></h3>
+        <div class="text-xs text-gray-500 mt-1" id="cityModalSub"></div>
+      </div>
+      <button class="btn" onclick="closeCityModal()">✕ 关闭</button>
+    </div>
+    <div class="flex items-center gap-2 mb-3 flex-wrap">
+      <select id="cityModalDistrict" class="input" style="max-width:220px" onchange="renderCityModal()">
+        <option value="">全部区县</option>
+      </select>
+      <input id="cityModalSearch" class="input" style="max-width:260px" placeholder="筛选站名 / 地址" oninput="renderCityModal()" />
+      <span class="text-xs text-gray-500" id="cityModalCount"></span>
+    </div>
+    <div class="overflow-y-auto flex-1 -mx-2 px-2" id="cityModalBody"></div>
+  </div>
+</div>
+
+<script>
+/* ========== 数据加载 ========== */
+let STATIONS = [];
+let PREV_DAY = null;
+
+/* ========== 留言建议（腾讯文档收集表）==========
+   formUrl  = 收集表填写链接（访客提交建议）
+   boardUrl = 建议汇总表格链接（嵌入展示 + 新窗口打开）*/
+const FEEDBACK = { formUrl: '', boardUrl: '' };
+(function setupFeedback() {
+  const btn = document.getElementById('fbSubmitBtn');
+  const frame = document.getElementById('fbBoard');
+  const link = document.getElementById('fbBoardLink');
+  if (FEEDBACK.formUrl) { btn.href = FEEDBACK.formUrl; }
+  else { btn.removeAttribute('href'); btn.style.opacity = .5; btn.title = '留言板配置中，稍后开放'; }
+  if (FEEDBACK.boardUrl) { frame.src = FEEDBACK.boardUrl; link.href = FEEDBACK.boardUrl; }
+  else { frame.style.display = 'none'; link.href = '#'; }
+})();
+
+/* ========== 访问统计（Cloudflare Pages Function + KV）========== */
+(function setupVisitStats() {
+  const el = document.getElementById('visitStats');
+  if (!el) return;
+
+  // 每个浏览器生成一个持久访客ID，服务端据此去重
+  let vid = null;
+  try {
+    vid = localStorage.getItem('fc_vid');
+    if (!vid) {
+      vid = (crypto.randomUUID && crypto.randomUUID())
+        || ('fc-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10));
+      localStorage.setItem('fc_vid', vid);
+    }
+  } catch (e) { /* 隐私模式等 localStorage 不可用时按匿名浏览量计 */ }
+
+  const render = d => {
+    el.innerHTML = '浏览量: <span class="t-amber">' +
+      Number(d.views || 0).toLocaleString('zh-CN') +
+      '</span> · 访客: <span class="t-amber">' +
+      Number(d.visitors || 0).toLocaleString('zh-CN') + '</span>';
+  };
+
+  fetch('/api/stats', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ vid: vid })
+  }).then(r => r.json()).then(render).catch(() => {
+    // 接口失败时退化为只读展示，保持占位符
+    fetch('/api/stats').then(r => r.json()).then(render).catch(() => {});
+  });
+})();
+let CITY_STATS = []; // {city, province, hw, brand, inst, total, guns, idleGuns}
+let PROV_STATS = []; // {prov, hw, brand, inst, total, guns}
+let NEW_TODAY = null; // {date, count, stations:[...]} 今日新增站点(由 build_full_data.js 生成)
+
+const CATEGORY_LABEL = { highway: '高速', brand: '品牌', instation: '站中站' };
+const CATEGORY_COLOR = { highway: '#f59e0b', brand: '#06b6d4', instation: '#10b981' };
+
+async function init() {
+  const resp = await (window.__dataFetch || fetch('byd_stations_full.json'));
+  STATIONS = await resp.json();
+  try {
+    const r2 = await (window.__prevFetch || fetch('prev_day.json'));
+    if (r2 && r2.ok) PREV_DAY = await r2.json();
+  } catch (e) { /* 快照不存在时静默跳过 */ }
+  try {
+    const r3 = await (window.__newFetch || fetch('new_today.json'));
+    if (r3 && r3.ok) NEW_TODAY = await r3.json();
+  } catch (e) { /* 新增站点文件不存在时静默跳过 */ }
+  buildStats();
+  buildTables();
+  renderNewToday();
+  drawAll();
+}
+
+function buildStats() {
+  const counts = { highway: 0, brand: 0, instation: 0 };
+  const guns = { highway: 0, brand: 0, instation: 0 };
+  const idle = { highway: 0, brand: 0, instation: 0 };
+  STATIONS.forEach(s => {
+    counts[s.category]++;
+    guns[s.category] += s.superNum || 0;
+    idle[s.category] += s.idleSuperNum || 0;
+  });
+  const total = STATIONS.length;
+  const totalG = STATIONS.reduce((a, s) => a + (s.superNum || 0), 0);
+  const totalIdle = STATIONS.reduce((a, s) => a + (s.idleSuperNum || 0), 0);
+  const offlineN = STATIONS.filter(s => s.status === 'offline').length;
+  const onlineN = total - offlineN;
+  document.getElementById('cTotal').textContent = total.toLocaleString();
+  document.getElementById('cTotalSub').innerHTML = `在线 <b class="t-emerald">${onlineN.toLocaleString()}</b> · 下线 <b class="t-orange">${offlineN.toLocaleString()}</b>`;
+  document.getElementById('cGuns').textContent = totalG.toLocaleString();
+  document.getElementById('cGunsSub').innerHTML = `利用率 ${((1 - totalIdle/totalG)*100).toFixed(1)}%`;
+  document.getElementById('cHw').textContent = counts.highway;
+  document.getElementById('cHwSub').innerHTML = `枪 <b>${guns.highway}</b> · 占 ${(counts.highway/total*100).toFixed(1)}%`;
+  document.getElementById('cBrand').textContent = counts.brand;
+  document.getElementById('cBrandSub').innerHTML = `枪 <b>${guns.brand}</b> · 占 ${(counts.brand/total*100).toFixed(1)}%`;
+  document.getElementById('cInst').textContent = counts.instation;
+  document.getElementById('cInstSub').innerHTML = `枪 <b>${guns.instation}</b> · 占 ${(counts.instation/total*100).toFixed(1)}%`;
+  document.getElementById('cCities').textContent = new Set(STATIONS.map(s => s.city)).size;
+  document.getElementById('cCitiesSub').textContent = `覆盖 ${new Set(STATIONS.map(s => s.province)).size} 省`;
+  document.getElementById('cntAll').textContent = `(${total})`;
+  document.getElementById('cntHw').textContent = `(${counts.highway})`;
+  document.getElementById('cntBrand').textContent = `(${counts.brand})`;
+  document.getElementById('cntInst').textContent = `(${counts.instation})`;
+  document.getElementById('dtCntHw').textContent = `(${counts.highway})`;
+  document.getElementById('dtCntBrand').textContent = `(${counts.brand})`;
+  document.getElementById('dtCntInst').textContent = `(${counts.instation})`;
+  renderDeltas({ total, guns: totalG, highway: counts.highway, brand: counts.brand, instation: counts.instation, cities: new Set(STATIONS.map(s => s.city)).size });
+}
+
+/* 对比昨日快照，渲染每个统计卡的增减徽章 */
+function renderDeltas(cur) {
+  if (!PREV_DAY || typeof PREV_DAY.total !== 'number') return;
+  const items = [
+    ['dTotal', cur.total, PREV_DAY.total],
+    ['dGuns', cur.guns, PREV_DAY.guns],
+    ['dHw', cur.highway, PREV_DAY.highway],
+    ['dBrand', cur.brand, PREV_DAY.brand],
+    ['dInst', cur.instation, PREV_DAY.instation],
+    ['dCities', cur.cities, PREV_DAY.cities]
+  ];
+  const prevDate = PREV_DAY.date ? `较 ${PREV_DAY.date}` : '较昨日';
+  items.forEach(([id, now, prev]) => {
+    const el = document.getElementById(id);
+    if (!el || typeof prev !== 'number') return;
+    const d = now - prev;
+    if (d > 0) { el.className = 'delta-badge delta-up'; el.textContent = `▲ +${d}`; }
+    else if (d < 0) { el.className = 'delta-badge delta-down'; el.textContent = `▼ ${d}`; }
+    else { el.className = 'delta-badge delta-flat'; el.textContent = '— 持平'; }
+    el.title = prevDate;
+    el.style.display = '';
+  });
+}
+
+function buildTables() {
+  // 城市聚合
+  const cm = {}, pm = {};
+  STATIONS.forEach(s => {
+    const k = s.city;
+    if (!cm[k]) cm[k] = { city: k, province: s.province, hw: 0, brand: 0, inst: 0, total: 0, guns: 0, idleGuns: 0 };
+    const c = cm[k];
+    c.total++; c.guns += s.superNum || 0; c.idleGuns += s.idleSuperNum || 0;
+    if (s.category === 'highway') c.hw++;
+    else if (s.category === 'brand') c.brand++;
+    else c.inst++;
+    if (!pm[s.province]) pm[s.province] = { prov: s.province, hw: 0, brand: 0, inst: 0, total: 0, guns: 0 };
+    const p = pm[s.province];
+    p.total++; p.guns += s.superNum || 0;
+    if (s.category === 'highway') p.hw++;
+    else if (s.category === 'brand') p.brand++;
+    else p.inst++;
+  });
+  CITY_STATS = Object.values(cm).sort((a, b) => b.guns - a.guns);
+  PROV_STATS = Object.values(pm).sort((a, b) => b.guns - a.guns);
+  renderCityTable(CITY_STATS);
+  renderProvTable(PROV_STATS);
+  fillCityOptions();
+}
+
+const catCell = (scope, cat, val, color) =>
+  `<td class="text-center ${val > 0 ? 'linkable ' + color : 'text-gray-600'}" ${val > 0 ? `onclick="showStations('${scope.type}','${escAttr(scope.key)}','${cat}')" title="点击查看明细"` : ''}>${val}</td>`;
+
+function escAttr(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+function renderCityTable(list) {
+  const tb = document.getElementById('cityTbody');
+  tb.innerHTML = list.map((c, i) => {
+    const medal = i < 3 ? `<span class="medal medal-${i+1}">${['🥇','🥈','🥉'][i]}</span>` : `<span class="text-gray-500">${i+1}</span>`;
+    const sc = { type: 'city', key: c.city };
+    return `<tr><td>${medal}</td><td><b class="linkable" onclick="showStations('city','${escAttr(c.city)}','all')" title="查看 ${escAttr(c.city)} 全部站点">${c.city}</b></td><td class="text-gray-400">${c.province}</td>
+      ${catCell(sc, 'highway', c.hw, 't-orange')}
+      ${catCell(sc, 'brand', c.brand, 't-cyan')}
+      ${catCell(sc, 'instation', c.inst, 't-emerald')}
+      ${catCell(sc, 'all', c.total, 'text-gray-100')}
+      <td class="text-center">${c.guns}</td>
+      <td class="text-center text-gray-400">${c.idleGuns}</td></tr>`;
+  }).join('');
+}
+
+function renderProvTable(list) {
+  const tb = document.getElementById('provTbody');
+  tb.innerHTML = list.map((p, i) => {
+    const medal = i < 3 ? `<span class="medal medal-${i+1}">${['🥇','🥈','🥉'][i]}</span>` : `<span class="text-gray-500">${i+1}</span>`;
+    const sc = { type: 'province', key: p.prov };
+    return `<tr><td>${medal}</td><td><b class="linkable" onclick="showStations('province','${escAttr(p.prov)}','all')" title="查看 ${escAttr(p.prov)} 全部站点">${p.prov}</b></td>
+      ${catCell(sc, 'highway', p.hw, 't-orange')}
+      ${catCell(sc, 'brand', p.brand, 't-cyan')}
+      ${catCell(sc, 'instation', p.inst, 't-emerald')}
+      ${catCell(sc, 'all', p.total, 'text-gray-100')}
+      <td class="text-center">${p.guns}</td></tr>`;
+  }).join('');
+}
+
+/* ========== 站点明细弹窗 ========== */
+let modalCtx = null;
+function showStations(type, key, cat) {
+  const pool = STATIONS.filter(s => type === 'city' ? s.city === key : s.province === key);
+  modalCtx = { type, key, cat, pool };
+  const catName = { highway: '高速充电站', brand: '品牌充电站', instation: '站中站', all: '全部站点' }[cat];
+  const scopeName = type === 'city' ? key : key;
+  document.getElementById('cityModalTitle').textContent = `${scopeName} · ${catName}`;
+  document.getElementById('cityModalSub').textContent =
+    `${type === 'city' ? '城市' : '省份'}：${scopeName} ｜ 类型：${catName} ｜ 共 ${pool.filter(s => cat === 'all' || s.category === cat).length} 站（按区县分组）`;
+  // 区县下拉
+  const dset = new Set(pool.filter(s => cat === 'all' || s.category === cat).map(s => districtOf(s)));
+  const sel = document.getElementById('cityModalDistrict');
+  sel.innerHTML = '<option value="">全部区县</option>' +
+    [...dset].sort().map(d => `<option value="${escAttr(d)}">${d}（${pool.filter(s => (cat === 'all' || s.category === cat) && districtOf(s) === d).length}）</option>`).join('');
+  sel.value = '';
+  document.getElementById('cityModalSearch').value = '';
+  document.getElementById('cityModal').style.display = '';
+  renderCityModal();
+}
+function closeCityModal() { document.getElementById('cityModal').style.display = 'none'; modalCtx = null; }
+function renderCityModal() {
+  if (!modalCtx) return;
+  const { cat, pool } = modalCtx;
+  const dist = document.getElementById('cityModalDistrict').value;
+  const kw = document.getElementById('cityModalSearch').value.trim().toLowerCase();
+  let list = pool.filter(s => cat === 'all' || s.category === cat);
+  if (dist) list = list.filter(s => districtOf(s) === dist);
+  if (kw) list = list.filter(s => (s.name || '').toLowerCase().includes(kw) || (s.address || '').toLowerCase().includes(kw));
+  document.getElementById('cityModalCount').textContent = `显示 ${list.length} 站`;
+  // 按区县分组
+  const groups = {};
+  list.forEach(s => { const d = districtOf(s); (groups[d] = groups[d] || []).push(s); });
+  const body = document.getElementById('cityModalBody');
+  const keys = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length);
+  if (!keys.length) { body.innerHTML = '<div class="route-empty">没有匹配的站点。</div>'; return; }
+  body.innerHTML = keys.map(d => `
+    <div class="district-group">
+      <div class="district-head">📍 ${d} · ${groups[d].length} 站</div>
+      <table class="tbl"><tbody>
+        ${groups[d].sort((a, b) => b.superNum - a.superNum).map((s, i) => `
+          <tr>
+            <td style="width:40px" class="text-gray-500">${i + 1}</td>
+            <td><b class="${s.status==='offline'?'text-gray-500':''}">${s.name}</b>${s.status==='offline'?' <span class="pill pill-off">下线</span>':''}</td>
+            <td style="width:96px"><span class="pill" style="background:${CATEGORY_COLOR[s.category]}22;color:${CATEGORY_COLOR[s.category]}">${CATEGORY_LABEL[s.category] || '站中站'}</span></td>
+            <td style="width:220px" class="text-gray-400 text-xs">${s.address || ''}</td>
+            <td class="text-center" style="width:80px"><b>${s.superNum}</b></td>
+            <td class="text-center ${s.idleSuperNum > 0 ? 't-emerald' : 't-orange'}" style="width:70px">${s.idleSuperNum}</td>
+          </tr>`).join('')}
+      </tbody></table>
+    </div>`).join('');
+}
+function districtOf(s) {
+  let a = s.address || '';
+  if (!a) return '其他';
+  if (s.province && a.startsWith(s.province)) a = a.slice(s.province.length);
+  const cm = a.match(/^(.+?(?:市|自治州|盟|地区))/);
+  if (cm) a = a.slice(cm[1].length);
+  const dm = a.match(/^(.+?(?:区|县|旗|市))/);
+  return dm ? dm[1] : (a.slice(0, 4) || '其他');
+}
+
+document.getElementById('citySearch').addEventListener('input', e => {
+  const v = e.target.value.trim();
+  if (!v) return renderCityTable(CITY_STATS);
+  const q = v.toLowerCase();
+  const filtered = CITY_STATS.filter(c => c.city.toLowerCase().includes(q) || c.province.toLowerCase().includes(q));
+  renderCityTable(filtered);
+});
+
+/* ========== 详情列表 ========== */
+let detailCat = 'highway';
+function setDetailCat(el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  detailCat = el.dataset.cat;
+  const si = document.getElementById('detailSearch');
+  if (si) si.value = '';
+  renderDetail();
+}
+function renderDetail() {
+  const desc = {
+    highway: '高速站 = 站名含 高速/服务区/收费站/匝道/枢纽/互通/出口（排除"进出口"）。',
+    brand: '品牌站 = 站名含 比亚迪/王朝/海洋/腾势/方程豹/仰望/4S 等品牌关键词。',
+    instation: '站中站 = 其余全部，多建在商场、写字楼、停车场等场站内。',
+  };
+  const base = STATIONS.filter(s => s.category === detailCat);
+  const kwEl = document.getElementById('detailSearch');
+  const kw = (kwEl ? kwEl.value : '').trim().toLowerCase();
+  const list = base
+    .filter(s => !kw || (s.name || '').toLowerCase().includes(kw)
+      || (s.city || '').toLowerCase().includes(kw)
+      || (s.address || '').toLowerCase().includes(kw))
+    .sort((a, b) => b.superNum - a.superNum);
+  document.getElementById('detailDesc').textContent =
+    desc[detailCat] + (kw ? `　🔍 匹配 ${list.length} / ${base.length} 站` : `　共 ${base.length} 站`);
+  const tb = document.getElementById('detailTbody');
+  if (!list.length) { tb.innerHTML = '<tr><td colspan="7" class="route-empty">没有匹配的站点，换个关键词试试。</td></tr>'; return; }
+  tb.innerHTML = list.map((s, i) => {
+    const tag = detailCat === 'highway' ? (s.highwayTag || '') : (s.brandTag || '场站');
+    const off = s.status === 'offline'
+      ? ' <span class="pill pill-off" title="' + (s.recheckDate
+          ? '最后在线 ' + s.lastSeen + '；已于 ' + s.recheckDate + ' 复核（5km/30km/按名三重查询均未命中）确认下线'
+          : '最后在线 ' + s.lastSeen) + '">下线' + (s.recheckDate ? '·已复核' : '') + '</span>'
+      : '';
+    return `<tr><td class="text-gray-500">${i+1}</td><td><b class="${s.status==='offline'?'text-gray-500':''}">${s.name}</b>${off}</td>
+      <td><span class="pill" style="background:${CATEGORY_COLOR[detailCat]}22;color:${CATEGORY_COLOR[detailCat]}">${tag}</span></td>
+      <td class="text-gray-400">${s.city}</td>
+      <td class="text-gray-400 text-xs">${s.address || ''}</td>
+      <td class="text-center"><b>${s.superNum}</b></td>
+      <td class="text-center ${s.idleSuperNum > 0 ? 't-emerald' : 't-orange'}">${s.idleSuperNum}</td></tr>`;
+  }).join('');
+}
+/* ========== 今日新增站点 ==========
+ * 数据来自 new_today.json，由 build_full_data.js 与昨日快照做差集生成。
+ */
+/* ========== 今日新增站点 ==========
+ * 数据来自 new_today.json：
+ *   newByCategory.{highway,brand,instation} = 本次新上线站点（按三分类分组）
+ *   offlineCount / offlineTodayCount = 下线口径（累计 / 今日）
+ * 判定改用站点 id + firstSeen（见 build_full_data.js / registry.js），
+ * 可消除改名/迁址导致的误判，且天然幂等（同日重复运行不会重复计新增）。
+ */
+let newCatFilter = 'all';
+function setNewCat(el) {
+  document.querySelectorAll('#newCatFilter [data-ncat]').forEach(b => b.classList.remove('active', 'active-amber'));
+  el.classList.add('active-amber');
+  newCatFilter = el.dataset.ncat;
+  renderNewToday();
+}
+
+function renderNewToday() {
+  const badge = document.getElementById('newTodayBadge');
+  const desc = document.getElementById('newTodayDesc');
+  const tb = document.getElementById('newTbody');
+  if (!badge || !tb) return;
+
+  if (!NEW_TODAY) {
+    badge.textContent = '暂不可用';
+    desc.textContent = '尚未生成今日新增数据，下次每日更新后会自动填充。';
+    tb.innerHTML = '<tr><td colspan="7" class="route-empty">暂无数据</td></tr>';
+    return;
+  }
+
+  const grp = NEW_TODAY.newByCategory || { highway: [], brand: [], instation: [] };
+  const cHw = grp.highway.length, cBrand = grp.brand.length, cInst = grp.instation.length;
+  const totalNew = cHw + cBrand + cInst;
+  const offTotal = NEW_TODAY.offlineCount || 0;
+  const offToday = NEW_TODAY.offlineTodayCount || 0;
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v ? '(' + v + ')' : ''; };
+  set('ncAll', totalNew); set('ncHw', cHw); set('ncBrand', cBrand); set('ncInst', cInst);
+
+  if (totalNew > 0) {
+    badge.innerHTML = `本次更新　新增 <b class="t-emerald">${totalNew}</b> 站`;
+    desc.innerHTML = `口径：按站点 id 记录的「首次出现」判定新增（消除改名/迁址误判）。`
+      + `　🛣️ 高速 ${cHw} · 🏢 品牌 ${cBrand} · 🏛️ 站中站 ${cInst}`
+      + (offToday ? `　｜ 今日下线 <b class="t-orange">${offToday}</b> 站` : '')
+      + (offTotal ? `　｜ 累计下线 <b class="t-orange">${offTotal}</b> 站（已保留，总数不变）` : '');
+  } else {
+    badge.textContent = '本次无新增';
+    desc.innerHTML = `累计收录 <b>${NEW_TODAY.totalStations != null ? NEW_TODAY.totalStations : '—'}</b> 站，本次更新没有新上线的站。`
+      + (offTotal ? `　｜ 其中 <b class="t-orange">${offTotal}</b> 站已标注「下线」（数据保留，总数不变）` : '')
+      + `　｜ 新站将在下次每日扫描后自动归类到高速 / 品牌 / 站中站。`;
+  }
+
+  // 按当前筛选分类取列表
+  let list = newCatFilter === 'all'
+    ? [...grp.highway, ...grp.brand, ...grp.instation]
+    : (grp[newCatFilter] || []);
+
+  const kwEl = document.getElementById('newSearch');
+  const kw = (kwEl ? kwEl.value : '').trim().toLowerCase();
+  if (kw) list = list.filter(s => (s.name || '').toLowerCase().includes(kw)
+    || (s.city || '').toLowerCase().includes(kw)
+    || (s.province || '').toLowerCase().includes(kw)
+    || (s.address || '').toLowerCase().includes(kw));
+
+  if (!list.length) {
+    tb.innerHTML = '<tr><td colspan="7" class="route-empty">'
+      + (totalNew ? '没有匹配的站点，换个关键词试试。' : '累计收录已含全部站点，本次更新无新增。') + '</td></tr>';
+    return;
+  }
+  tb.innerHTML = list.map((s, i) => {
+    const c = CATEGORY_COLOR[s.category] || '#9ca3af';
+    const tag = s.category === 'highway' ? (s.highwayTag || '高速')
+      : s.category === 'brand' ? (s.brandTag || '品牌') : '场站';
+    return `<tr><td class="text-gray-500">${i + 1}</td><td><b>${s.name}</b></td>
+      <td><span class="pill" style="background:${c}22;color:${c}">${tag}</span></td>
+      <td class="text-gray-400">${s.city}</td>
+      <td class="text-gray-500 text-xs">${s.province || ''}</td>
+      <td class="text-gray-400 text-xs">${s.address || ''}</td>
+      <td class="text-center"><b>${s.superNum || 0}</b></td></tr>`;
+  }).join('');
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const si = document.getElementById('detailSearch');
+  if (si) si.addEventListener('input', renderDetail);
+});
+
+/* ========== 地图 ========== */
+let mapChart, routeChart = null, mapType = 'scatter', mapCat = 'all', geoReady = false, curProv = null;
+
+/* 省份简称 → 本地geojson文件名（echarts官方包，注意陕西=shanxi1） */
+const PROV_FILE = {
+  '北京':'beijing','天津':'tianjin','上海':'shanghai','重庆':'chongqing',
+  '河北':'hebei','山西':'shanxi','辽宁':'liaoning','吉林':'jilin','黑龙江':'heilongjiang',
+  '江苏':'jiangsu','浙江':'zhejiang','安徽':'anhui','福建':'fujian','江西':'jiangxi',
+  '山东':'shandong','河南':'henan','湖北':'hubei','湖南':'hunan','广东':'guangdong',
+  '海南':'hainan','四川':'sichuan','贵州':'guizhou','云南':'yunnan','陕西':'shanxi1',
+  '甘肃':'gansu','青海':'qinghai','台湾':'taiwan','内蒙古':'neimenggu','广西':'guangxi',
+  '西藏':'xizang','宁夏':'ningxia','新疆':'xinjiang','香港':'xianggang','澳门':'aomen',
+};
+
+function setMapType(el) {
+  document.querySelectorAll('[data-maptype]').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  mapType = el.dataset.maptype;
+  drawMap();
+}
+function setMapCat(el) {
+  document.querySelectorAll('[data-cat]').forEach(b => b.classList.remove('active', 'active-amber'));
+  el.classList.add('active-amber');
+  mapCat = el.dataset.cat;
+  drawMap();
+}
+async function loadGeo() {
+  if (geoReady) return;
+  /* china_map.js 已自行 registerMap('china')，此处仅做兜底 */
+  geoReady = true;
+}
+async function drillTo(name) {
+  const file = PROV_FILE[name];
+  if (!file) return;
+  try {
+    const r = await fetch('provinces/' + file + '.json');
+    const g = await r.json();
+    echarts.registerMap('prov', g);
+    curProv = name;
+    document.getElementById('backNation').style.display = '';
+    document.getElementById('mapTitle').textContent = '📍 ' + name + ' · 闪充站分布';
+    drawMap();
+  } catch (e) { console.warn('下钻失败', name, e); }
+}
+function backToNation() {
+  curProv = null;
+  document.getElementById('backNation').style.display = 'none';
+  document.getElementById('mapTitle').textContent = '📍 全国闪充站分布';
+  drawMap();
+}
+/* 当前视野内的站点（全国 or 选中省份） */
+function visibleStations() {
+  return curProv ? STATIONS.filter(s => s.province.startsWith(curProv)) : STATIONS;
+}
+/* 散点大小：按闪充枪数开方缩放，下钻后更大 */
+function symSize(v) {
+  const n = v && v[2] ? v[2] : 1;
+  const k = curProv ? 2.6 : 1.9;
+  return Math.max(curProv ? 7 : 5, Math.min(curProv ? 22 : 15, 3 + Math.sqrt(n) * k));
+}
+/* 三类用不同形状：高速▲ 品牌■ 站中站● */
+const CAT_SYMBOL = { highway: 'triangle', brand: 'rect', instation: 'circle' };
+
+async function drawMap() {
+  const ml = document.getElementById('mapLoading');
+  if (ml) ml.remove();
+  if (!mapChart) {
+    mapChart = echarts.init(document.getElementById('mapChart'));
+    mapChart.on('click', p => {
+      if (p.componentType === 'geo' && p.name && p.name !== curProv) drillTo(p.name);
+    });
+  }
+  const base = visibleStations();
+  const data = mapCat === 'all' ? base : base.filter(s => s.category === mapCat);
+  if (mapType === 'heatmap') {
+    mapChart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: { trigger: 'item', formatter: p => p.data ? `${p.data.name}<br>${p.data.city} · ${p.data.superNum}枪` : p.name },
+      visualMap: { min: 0, max: 30, calculable: true, orient: 'vertical', right: 20, top: 'center', textStyle: { color: '#9ca3af' }, seriesIndex: 0, inRange: { color: ['#10b98133','#10b981','#06b6d4','#f59e0b','#f97316'] } },
+      geo: geoOpt(),
+      series: [{
+        name: '热度', type: 'heatmap', coordinateSystem: 'geo',
+        pointSize: curProv ? 18 : 12, blurSize: curProv ? 24 : 16,
+        data: data.map(s => [s.lng, s.lat, Math.min(30, s.superNum || 1)]),
+      }].concat(routeOverlaySeries()),
+    }, true);
+  } else {
+    const series = mapCat === 'all' ? [
+      { name: '🛣️ 高速', color: '#f59e0b', cat: 'highway', data: base.filter(s => s.category === 'highway') },
+      { name: '🏢 品牌', color: '#06b6d4', cat: 'brand', data: base.filter(s => s.category === 'brand') },
+      { name: '🏛️ 站中站', color: '#10b981', cat: 'instation', data: base.filter(s => s.category === 'instation') },
+    ] : [{ name: CATEGORY_LABEL[mapCat], color: CATEGORY_COLOR[mapCat], cat: mapCat, data }];
+    mapChart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'item',
+        formatter: p => p.data ? `<b>${p.data.name}</b><br>${p.seriesName}<br>${p.data.city} · ${p.data.superNum}枪 · 空闲${p.data.idleSuperNum}<br><span style="color:#9ca3af">${p.data.address || ''}</span>` : p.name,
+      },
+      legend: {
+        show: mapCat === 'all', textStyle: { color: '#d1d5db', fontSize: 13 }, top: 8,
+        itemWidth: 16, itemHeight: 12,
+      },
+      geo: geoOpt(),
+      series: series.map(s => ({
+        name: s.name, type: 'scatter', coordinateSystem: 'geo',
+        progressive: 0, progressiveThreshold: 100000,
+        symbol: CAT_SYMBOL[s.cat] || 'circle',
+        itemStyle: { color: s.color, opacity: 0.8, borderColor: '#0a0e17', borderWidth: 0.5 },
+        emphasis: { scale: 1.6, itemStyle: { opacity: 1, shadowBlur: 8, shadowColor: s.color } },
+        symbolSize: symSize,
+        data: s.data.map(x => ({ name: x.name, value: [x.lng, x.lat, x.superNum], ...x,
+          itemStyle: x.status === 'offline' ? { color: '#6b7280', opacity: 0.5, borderColor: '#9ca3af', borderWidth: 1 } : undefined })),
+      })).concat(routeOverlaySeries()),
+    }, true);
+  }
+}
+/* 规划结果叠加到全国大地图的图层（路线 + 推荐站 + 起终点） */
+function routeOverlaySeries() {
+  const o = routeOverlay;
+  if (!o) return [];
+  return [
+    {
+      name: '🚗 规划路线', type: 'lines', coordinateSystem: 'geo', silent: true, z: 12,
+      polyline: true,
+      data: splitByHw(o.line, o.hw).map(s => ({
+        coords: s.pts,
+        name: '规划路线 ' + o.from + '→' + o.to + (s.hw ? '（高速）' : '（普通道路）'),
+        lineStyle: s.hw
+          ? { color: '#7dd3fc', width: 3, opacity: .95, shadowColor: '#3b82f6', shadowBlur: 10, cap: 'round', join: 'round' }
+          : { color: '#94a3b8', width: 1.8, opacity: .8, cap: 'round', join: 'round' },
+      })),
+    },
+    {
+      name: '⭐ 规划充电站', type: 'scatter', coordinateSystem: 'geo', z: 14, symbolSize: 15,
+      itemStyle: { color: '#f59e0b', borderColor: '#fff8e7', borderWidth: 2, shadowColor: '#f59e0b', shadowBlur: 12 },
+      label: { show: true, formatter: p => p.data.label, color: '#0a0e17', fontSize: 11, fontWeight: 700 },
+      data: o.stops.map((p, i) => ({
+        name: '⭐ 第' + (i + 1) + '站 ' + p.s.name,
+        value: [p.s.lng, p.s.lat],
+        label: String(i + 1),
+        city: p.s.city, address: p.s.address,
+        superNum: p.s.superNum, idleSuperNum: p.s.idleSuperNum,
+      })),
+    },
+    {
+      name: '📍 起终点', type: 'scatter', coordinateSystem: 'geo', z: 15, symbol: 'pin', symbolSize: 40,
+      itemStyle: { color: '#ef4444', shadowColor: '#ef4444', shadowBlur: 10 },
+      label: { show: true, position: 'top', color: '#f3f4f6', fontSize: 11, fontWeight: 700, formatter: p => p.data.label },
+      data: [
+        { name: '起点 ' + o.from, value: [o.A.lng, o.A.lat], label: '起' },
+        { name: '终点 ' + o.to, value: [o.B.lng, o.B.lat], label: '终' },
+      ],
+    },
+  ];
+}
+
+function geoOpt() {
+  return {
+    map: curProv ? 'prov' : 'china', roam: true, zoom: curProv ? 0.9 : 1.2,
+    scaleLimit: { min: 0.5, max: 12 },
+    label: { show: !!curProv, fontSize: 11, color: '#9ca3af' },
+    itemStyle: { areaColor: '#111827', borderColor: '#374151', borderWidth: 0.5 },
+    emphasis: { itemStyle: { areaColor: '#1f2937' }, label: { show: true, color: '#f3f4f6' } },
+    select: { itemStyle: { areaColor: '#1f2937' }, label: { show: true, color: '#f3f4f6' } },
+  };
+}
+
+/* ========== 其他图表 ========== */
+function drawAll() {
+  // 饼图
+  const counts = { highway: 0, brand: 0, instation: 0 };
+  STATIONS.forEach(s => counts[s.category]++);
+  echarts.init(document.getElementById('pieChart')).setOption({
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'item', formatter: '{b}: {c} 站 ({d}%)' },
+    legend: { bottom: 0, textStyle: { color: '#9ca3af' } },
+    series: [{
+      type: 'pie', radius: ['45%', '70%'], center: ['50%', '45%'],
+      itemStyle: { borderColor: '#0a0e17', borderWidth: 2 },
+      label: { color: '#f3f4f6', formatter: '{b}\n{c}站 ({d}%)' },
+      data: [
+        { value: counts.highway, name: '🛣️ 高速', itemStyle: { color: '#f59e0b' } },
+        { value: counts.brand, name: '🏢 品牌', itemStyle: { color: '#06b6d4' } },
+        { value: counts.instation, name: '🏛️ 站中站', itemStyle: { color: '#10b981' } },
+      ],
+    }],
+  });
+  // 省份堆叠
+  const top20 = PROV_STATS.slice(0, 20).reverse();
+  echarts.init(document.getElementById('provChart')).setOption({
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    legend: { textStyle: { color: '#9ca3af', fontSize: 13 }, top: 5, itemWidth: 16, itemHeight: 11 },
+    grid: { left: 95, right: 30, top: 42, bottom: 30 },
+    xAxis: { type: 'value', axisLine: { lineStyle: { color: '#374151' } }, axisLabel: { color: '#9ca3af' }, splitLine: { lineStyle: { color: '#1f2937' } } },
+    yAxis: {
+      type: 'category', data: top20.map(p => p.prov),
+      axisLine: { lineStyle: { color: '#374151' } },
+      axisLabel: { color: '#f3f4f6', fontSize: 14, margin: 14 },
+      axisTick: { show: false },
+    },
+    series: [
+      { name: '高速', type: 'bar', stack: 's', barCategoryGap: '45%', itemStyle: { color: '#f59e0b' }, data: top20.map(p => p.hw) },
+      { name: '品牌', type: 'bar', stack: 's', barCategoryGap: '45%', itemStyle: { color: '#06b6d4' }, data: top20.map(p => p.brand) },
+      { name: '站中站', type: 'bar', stack: 's', barCategoryGap: '45%', itemStyle: { color: '#10b981' }, data: top20.map(p => p.inst) },
+    ],
+  });
+}
+
+/* 等 DOMContentLoaded：defer 的 echarts/china_map 执行完毕后才画图 */
+const boot = () => init().then(() => { drawMap(); renderDetail(); });
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+window.addEventListener('resize', () => mapChart && mapChart.resize());
+function dismissWelcome() { document.getElementById('modal').remove(); }
+
+/* ========== 长途充电规划 ========== */
+const normCity = s => String(s || '').trim().replace(/市$/, '');
+function haversine(a, b) {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
+  const t = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(Math.min(1, t)));
+}
+function cityCenter(name) {
+  const n = normCity(name);
+  const list = STATIONS.filter(s => normCity(s.city) === n);
+  if (!list.length) return null;
+  return {
+    lat: list.reduce((a, s) => a + s.lat, 0) / list.length,
+    lng: list.reduce((a, s) => a + s.lng, 0) / list.length,
+    n: list.length,
+  };
+}
+function fillCityOptions() {
+  const dl = document.getElementById('cityOptions');
+  if (!dl) return;
+  const names = [...new Set(STATIONS.map(s => s.city))].filter(Boolean).sort();
+  dl.innerHTML = names.map(c => '<option value="' + normCity(c) + '">').join('');
+}
+function swapRoute() {
+  const a = document.getElementById('routeFrom'), b = document.getElementById('routeTo');
+  const t = a.value; a.value = b.value; b.value = t;
+}
+let lastRoutePlan = null;    // 缓存上一次路线，改续航/走廊时不重复请求高德
+let routeProjCache = null;   // 缓存站点到路线的投影结果（重算最贵的一段）
+
+/* ---- 站点可达性分级 ----
+   高速是封闭道路：路线正下方 2 km 的城市站，直线看着近，实际要下高速→进城→再上高速。
+   所以先按站名判定它到底属于哪一类，再决定"绕过去要花多少代价"。 */
+const ACCESS = {
+  svc:  { label: '🛣️ 高速服务区', short: '服务区', color: '#10b981', note: '就在高速上，不用下高速' },
+  exit: { label: '🔀 高速出口',   short: '出口',   color: '#f59e0b', note: '需下高速，出站即到' },
+  city: { label: '⚠️ 需下高速',   short: '需下高速', color: '#fb7185', note: '在高速外的城区，要下高速绕进去' },
+  road: { label: '✅ 顺路可达',   short: '顺路',   color: '#94a3b8', note: '在普通道路沿线，直接拐进去' },
+};
+/* 判定时同时看站名和地址：
+   全国有 461 座站地址里直接写着"G85银昆高速""G30连霍高速"，站名却不带"服务区"，
+   只看站名会把它们误判成城区站（昆仑→成都第 1 站就吃过这个亏）。 */
+function accessOf(s) {
+  const txt = String(s.name || '') + ' ' + String(s.address || '');
+  if (/服务区/.test(txt)) return 'svc';                       // 真·高速服务区
+  if (/收费站|高速出口|高速入口|高速出入口/.test(txt)) return 'exit';
+  if (/高速/.test(txt)) return 'exit';                        // 地址带高速名：高速沿线，出站即到
+  if (s.category === 'highway') return 'exit';                // 兜底：分到高速类但无关键字
+  return 'city';
+}
+/* 几何修正阈值（km）：一个站名字带"高速/服务区"，只说明它语义上属于高速系统，
+   不代表它就在你开的这条高速主线上。中国高速是密集网状，G5 主线旁几十公里就有
+   太原绕城/二环/静兴等平行高速。只有投影落在高速路段(hw=1)且直线偏离 ≤ 此阈值，
+   才是"真正顺路"的高速服务区/出口；否则虽有"高速"之名、实际要绕出去几十公里，
+   当作「需下高速」处理，UI 也如实标注"需绕行 X km"，避免误导"不用下高速"。
+   实测参考：G5 主线上的渭南芝川收费站出口 off=0.5km，而太原绕城/二环那些"名义高速"站 off=34~42km。 */
+const NEAR_HW = 8;
+/* 往返绕行代价（km）。off = 站点到路线的直线偏离。
+   这一项参与"续航够不够"的计算，是真实要跑的里程。 */
+const PENALTY_EXIT = 6;    // 下高速→收费站外→再上高速，往返额外成本
+const PENALTY_CITY = 16;   // 下高速→进城→出城→上高速，往返额外成本
+function detourCost(c) {
+  if (!c.hw) return 2 * c.off;            // 普通道路：路边站，直接拐进去再拐回来
+  if (c.acc === 'svc') return 2 * c.off;  // 服务区本来就在高速上，几乎不额外绕
+  if (c.acc === 'exit') return 2 * c.off + PENALTY_EXIT;
+  return 2 * c.off + PENALTY_CITY;        // 城市站：光直线距离会严重低估
+}
+/* 「少下高速」策略里，一次「需下高速」的充电，折合多少次普通充电的代价。
+   取 1000 是为了让它成为绝对优先的目标：先保证下高速次数最少，次数相同才比总充电次数。
+   有了它，"在服务区多充一次"就永远比"少充一次但得下高速"更划算。 */
+const CITY_STOP_COST = 1000;
+
+/* 把折线按"高速/普通"切成若干连续段，用于地图上分色显示 */
+function splitByHw(poly, hw) {
+  if (!hw || !hw.length) return [{ pts: poly, hw: 0 }];
+  const segs = [];
+  let cur = [poly[0]], curHw = hw[0] ? 1 : 0;
+  for (let i = 1; i < poly.length; i++) {
+    const h = hw[i] ? 1 : 0;
+    cur.push(poly[i]);
+    if (h !== curHw) { segs.push({ pts: cur, hw: curHw }); cur = [poly[i]]; curHw = h; }
+  }
+  if (cur.length > 1) segs.push({ pts: cur, hw: curHw });
+  return segs.length ? segs : [{ pts: poly, hw: 0 }];
+}
+
+/* ---- 路线几何：把站点投影到真实路径上 ---- */
+function buildRouteIndex(poly, hw) {
+  const cum = [0];
+  for (let i = 1; i < poly.length; i++) {
+    const kx = 111.32 * Math.cos(((poly[i - 1][1] + poly[i][1]) / 2) * Math.PI / 180);
+    cum.push(cum[i - 1] + Math.hypot((poly[i][0] - poly[i - 1][0]) * kx, (poly[i][1] - poly[i - 1][1]) * 110.57));
+  }
+  const total = cum[cum.length - 1];
+  const step = Math.max(total / 1100, 0.4);
+  const pts = [], cs = [], hs = [];
+  let last = 0;
+  for (let i = 0; i < poly.length; i++) {
+    if (!pts.length || cum[i] - cs[cs.length - 1] >= step || i === poly.length - 1) {
+      pts.push(poly[i]); cs.push(cum[i]);
+      // 抽稀会把多个原始点合成一段，段属性取区间内占比多的那种（少数服从多数）
+      let ones = 0, zeros = 0;
+      if (hw) for (let k = last; k <= i; k++) { if (hw[k]) ones++; else zeros++; }
+      hs.push(hw ? (ones >= zeros ? 1 : 0) : 0);
+      last = i;
+    }
+  }
+  return { pts, cum: cs, hw: hs, total };
+}
+function projectToRoute(idx, s) {
+  let bestD = Infinity, bestS = 0, bestI = 1;
+  for (let i = 1; i < idx.pts.length; i++) {
+    const x0 = idx.pts[i - 1][0], y0 = idx.pts[i - 1][1], x1 = idx.pts[i][0], y1 = idx.pts[i][1];
+    const kx = 111.32 * Math.cos(y0 * Math.PI / 180), ky = 110.57;
+    const ax = x0 * kx, ay = y0 * ky, bx = x1 * kx, by = y1 * ky;
+    const px = s.lng * kx, py = s.lat * ky;
+    const vx = bx - ax, vy = by - ay, wx = px - ax, wy = py - ay;
+    const len2 = vx * vx + vy * vy;
+    let t = len2 ? (wx * vx + wy * vy) / len2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const d = Math.hypot(px - (ax + t * vx), py - (ay + t * vy));
+    if (d < bestD) { bestD = d; bestS = idx.cum[i - 1] + t * (idx.cum[i] - idx.cum[i - 1]); bestI = i; }
+  }
+  return { d: bestD, s: bestS, hw: idx.hw[bestI] ? 1 : 0 };
+}
+/* 全量投影（每站都要算一次到路线的最近点），结果按沿路线里程排序并缓存 */
+function getProjected(route) {
+  const key = route.distance + ':' + route.polyline.length;
+  if (routeProjCache && routeProjCache.key === key) return routeProjCache.list;
+  const idx = buildRouteIndex(route.polyline, route.hw);
+  const list = [];
+  for (const s of STATIONS) {
+    const p = projectToRoute(idx, s);
+    const acc = accessOf(s);
+    const item = { s: s, along: p.s, off: p.d, hw: p.hw, acc: acc };
+    // 顺路等级：普通道路上的站 → 一律顺路；高速路段上的高速类站且贴主线 → 服务区/出口；
+    // 高速路段上的高速类站但偏离过大（平行高速/远郊）→ 降级为「需下高速」，DP 不再优先它，
+    // 避免被"名字带高速"的远郊平行高速站误导（如太原绕城/二环站 off=34km 却被当成顺路出口）。
+    let kind = p.hw ? acc : 'road';
+    const farHw = (acc === 'svc' || acc === 'exit') && !(p.hw && p.d <= NEAR_HW);
+    if (farHw) kind = 'city';
+    item.kind = kind;
+    item.farHw = farHw;   // 名义高速但不在主线上，UI 标"需绕行 X km"
+    item.cost = detourCost(item);
+    list.push(item);
+  }
+  list.sort((a, b) => a.along - b.along);
+  routeProjCache = { key: key, list: list, idx: idx };
+  return list;
+}
+
+/* ---- 用动态规划挑充电方案 ----
+   为什么不用贪心：贪心只看眼前这一站。实测北京→上海会先挑 15 km 处一个"顺路"站充电，
+   结果下一站照样得下高速 —— 白白多充 3 次，一次下高速也没省下来。
+   而"这站充了，后面是不是还得下高速"，只有把整条路一起算才知道。
+   DP 把每段都枚举一遍，直接对目标求全局最优：
+     · 少下高速：先最少化「需下高速」次数，次数相同再最少化充电次数（绕行做末位 tie-break）
+     · 少充电  ：直接最少化充电次数
+   站点按沿路线里程排序后是天然的有向无环图，从后往前枚举前驱即可，复杂度约 O(n × 续航内站数)。
+   返回 null = 走不通（某一段续航内没有任何可顺路到达的站）。 */
+function planByDP(all, totalKm, eff, maxDetour, mode) {
+  // 起点一脚油门能到终点就不用充
+  if (totalKm <= eff) return { list: [], blocked: false };
+  // 候选充电点：绕行在容忍范围内、且确实在起点与终点之间的站
+  // 注意：按钮「最大绕行」限制的是【真实往返绕行代价 cost】，不是直线偏离 off。
+  // 否则选 10km 实际只卡了 off≤10，而普通道路站实绕 = 2×off = 20km、城区站 = 2×off+16 = 36km，
+  // 表格里照样出现 20~36km 的「绕行」，用户会觉得按钮失效。
+  const stops = all.filter(c => c.cost <= maxDetour && c.along > 0 && c.along < totalKm);
+  const n = stops.length;
+  const BIG = Infinity;
+  // 在站 c 充一次的代价；末位加上极小的绕行权重，代价相同时优先绕行少的
+  const stepCost = c => (mode === 'highway' && c.kind === 'city' ? CITY_STOP_COST : 0) + 1 + c.cost / 1000;
+
+  const cost = new Array(n).fill(BIG);   // 充完 stops[j] 之后的最小累计代价
+  const par = new Array(n).fill(-2);     // 上一个充电点下标，-1 = 从起点直接过来
+  let bestCost = BIG, bestEnd = -1;      // 最优解：最后一个充电点
+
+  for (let j = 0; j < n; j++) {
+    const cj = stops[j];
+    // ① 起点直接开到 j
+    if (cj.along + cj.cost <= eff) { cost[j] = stepCost(cj); par[j] = -1; }
+    // ② 从前面某个充电点 i 开过来（i 从近到远倒着扫；再往前超出续航就可以停了）
+    for (let i = j - 1; i >= 0; i--) {
+      if (cj.along - stops[i].along + cj.cost > eff) break;   // i 再靠前只会更远
+      if (cost[i] === BIG) continue;                          // i 本身就到不了
+      const nc = cost[i] + stepCost(cj);
+      if (nc < cost[j]) { cost[j] = nc; par[j] = i; }
+    }
+    // ③ 充完 j 能不能一路开到终点
+    if (cost[j] < BIG && totalKm - cj.along <= eff && cost[j] < bestCost) {
+      bestCost = cost[j]; bestEnd = j;
+    }
+  }
+  const build = end => {
+    const seq = [];
+    for (let k = end; k >= 0; k = par[k]) seq.push(k);
+    seq.reverse();
+    return seq.map(i => {
+      const pi = par[i];
+      return { c: stops[i], advance: stops[i].along - (pi >= 0 ? stops[pi].along : 0), detour: stops[i].cost };
+    });
+  };
+  if (bestEnd !== -1) return { list: build(bestEnd), blocked: false };
+
+  /* 整条路走不通（某一段续航内没有任何可顺路到达的站）。
+     这时不要返回空方案 —— 退而求其次，给出"最远能覆盖到哪里"的方案，
+     并明确标注走不通，免得用户以为这条路能一路充到终点。 */
+  let far = -1;
+  for (let j = 0; j < n; j++) {
+    if (cost[j] < BIG && (far === -1 || stops[j].along > stops[far].along)) far = j;
+  }
+  return { list: far === -1 ? [] : build(far), blocked: true };
+}
+
+/* ---- 少下高速模式「顺路补点」----
+   DP 已经把「需下高速」次数压到最低，但它的次级目标是「尽量少充电」，
+   因此会跳过沿途真正顺路的服务区/高速出口 —— 哪怕它们就在主线边上。
+   典型例子：渭南芝川收费站出口（主线偏离仅 0.3km、实绕 6.6km），
+   因为「加它只多一次充电」而被省掉，结果规划里只见城区站、不见这个真顺路出口。
+   这层补点只做一件事：在每个较大的充电间隔里，最多补一个「真正贴着高速主线」
+   （true 服务区/出口、偏离 ≤ 2km）的站点，让你顺路在服务区/出口补电，
+   而不是一路顶到城区站才下高速。补点有界：每段最多 1 个 + 必满足续航约束，
+   不会无限插入；且只在「少下高速」模式生效（少充电模式尊重用户「次数最少」的意愿）。 */
+function refineWithExits(plan, all, totalKm, eff, maxDetour, gapThresh) {
+  if (!plan.length) return plan;
+  // 锚点 = 起点(0) + 每个已选充电站的里程 + 终点(totalKm)
+  const anchors = [0].concat(plan.map(p => p.c.along)).concat([totalKm]);
+  const chosen = new Set(plan.map(p => p.c.s.name));
+  const extra = [];
+  for (let g = 0; g < anchors.length - 1; g++) {
+    const a = anchors[g], b = anchors[g + 1];
+    if (b - a < gapThresh) continue;                 // 间隔不够大，无需补点
+    // 候选：严格落在该间隔内、偏离主线 ≤ 2km 的真·服务区/出口
+    const cands = all.filter(c => c.along > a + 1 && c.along < b - 1 &&
+      c.cost <= maxDetour && !chosen.has(c.s.name) &&
+      (c.acc === 'svc' || c.acc === 'exit') && !c.farHw && c.off <= 2);
+    if (!cands.length) continue;
+    // 取最靠近间隔中点、且实绕最小的那个（最顺路）
+    cands.sort((x, y) =>
+      Math.abs(x.along - (a + b) / 2) - Math.abs(y.along - (a + b) / 2) || (x.cost - y.cost));
+    const best = cands[0];
+    // 续航可达性：前一段（prev→best）和后一段（best→next）都要塞进续航
+    const okPrev = (best.along - a + best.cost) <= eff;
+    const nextStop = plan.find(p => p.c.along > b - 1e-6) || null;
+    const nextAlong = nextStop ? nextStop.c.along : totalKm;
+    const okNext = (nextAlong - best.along + (nextStop ? nextStop.detour : 0)) <= eff;
+    if (okPrev && okNext) {
+      extra.push({ c: best, advance: best.along - a, detour: best.cost, inserted: true });
+      chosen.add(best.s.name);
+    }
+  }
+  // 合并、按里程重排、重算每段推进里程
+  const merged = plan.concat(extra).sort((p, q) => p.c.along - q.c.along);
+  let prevA = 0;
+  merged.forEach(p => { p.advance = p.c.along - prevA; prevA = p.c.along; });
+  return merged;
+}
+
+/* ---- 起终点定位：先本地城市匹配，匹配不上再走高德地理编码 ---- */
+let routeOverlay = null;    // 规划结果，用于叠加到全国大地图
+async function resolvePoint(text) {
+  const t = String(text || '').trim();
+  if (!t) return null;
+  const c = cityCenter(t);
+  if (c) return { lng: c.lng, lat: c.lat, label: t, detail: normCity(t) + '（' + c.n + ' 座站的中心）', precise: false };
+  try {
+    const r = await fetch('/api/geocode', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: t }),
+    });
+    const j = await r.json();
+    if (j.error || !isFinite(j.lng)) return null;
+    const detail = [j.province, j.city, j.district].filter(Boolean).join('') || j.name;
+    return { lng: j.lng, lat: j.lat, label: t, detail: detail, precise: true, level: j.level };
+  } catch (e) { return null; }
+}
+function clearRouteOverlay() {
+  routeOverlay = null;
+  drawMap();
+  const b = document.getElementById('clearRouteBtn');
+  if (b) b.style.display = 'none';
+}
+
+async function planRoute() {
+  const sumEl = document.getElementById('routeSummary');
+  const mapEl = document.getElementById('routeMap');
+  const wrapEl = document.getElementById('routeTableWrap');
+  const tb = document.getElementById('routeTbody');
+  const from = document.getElementById('routeFrom').value.trim();
+  const to = document.getElementById('routeTo').value.trim();
+  const range = Number(document.getElementById('routeRange').value) || 300;
+  const safety = Number(document.getElementById('routeSafety').value) || 0.85;
+  const corridor = Number(document.getElementById('routeCorridor').value) || 10;
+  const maxDetour = Number(document.getElementById('routeMaxDetour').value) || 25;
+  const modeEl = document.getElementById('routeMode');
+  const mode = modeEl ? (modeEl.value || 'highway') : 'highway';
+  const eff = range * safety;
+
+  const fail = msg => {
+    sumEl.style.display = '';
+    sumEl.innerHTML = '<span class="t-orange">' + msg + '</span>';
+    mapEl.style.display = 'none'; wrapEl.style.display = 'none';
+  };
+  if (!from || !to) return fail('请填写起点和终点。');
+
+  sumEl.style.display = '';
+  sumEl.innerHTML = '<span class="text-gray-400">📍 正在定位起终点…</span>';
+  const A = await resolvePoint(from);
+  const B = await resolvePoint(to);
+  if (!A) return fail('定位不到起点「' + from + '」。可以填城市（昆明），也可以精确到区县甚至街道（昆明五华区 / 昆明南站）。');
+  if (!B) return fail('定位不到终点「' + to + '」。可以填城市（上海），也可以精确到区县甚至街道（上海浦东新区 / 上海虹桥站）。');
+  if (Math.abs(A.lat - B.lat) < 0.02 && Math.abs(A.lng - B.lng) < 0.02) return fail('起点和终点太近了，不用规划。');
+
+  sumEl.innerHTML = '<span class="text-gray-400">🛰️ 正在请求高德驾车路线（跨省约需 10~20 秒，已做缓存，第二次秒回）…</span>';
+
+  let route = null;
+  if (lastRoutePlan && lastRoutePlan.from === from && lastRoutePlan.to === to) route = lastRoutePlan.route;
+  if (!route) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000);
+    try {
+      const r = await fetch('/api/route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin: A.lng.toFixed(6) + ',' + A.lat.toFixed(6),
+          destination: B.lng.toFixed(6) + ',' + B.lat.toFixed(6),
+        }),
+        signal: controller.signal,
+      });
+      const j = await r.json();
+      if (j.error) return fail('路径服务：' + j.error + '（可稍后重试）');
+      if (!j.polyline || j.polyline.length < 2) return fail('未取到有效路线，请换一组城市试试。');
+      route = j;
+      lastRoutePlan = { from, to, route };
+    } catch (e) {
+      return fail('路径服务请求超时或失败（高德接口偶发较慢），请稍后重试。');
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  const totalKm = route.distance / 1000;
+  const cached = routeProjCache && routeProjCache.key === (route.distance + ':' + route.polyline.length);
+  if (!cached) {
+    sumEl.innerHTML = '<span class="text-gray-400">🧮 正在匹配沿途 ' + STATIONS.length + ' 座站点…</span>';
+    await new Promise(r => setTimeout(r, 30));   // 让 loading 先渲染出来
+  }
+  const all = getProjected(route);
+
+  // 走廊内站点 = 展示用的「沿途可选」
+  const cand = all.filter(c => c.off <= corridor);
+
+  // 推荐方案：单段代价 = 沿路线推进 + 往返绕路，必须塞进续航；整条路一起做全局最优
+  const dp = planByDP(all, totalKm, eff, maxDetour, mode);
+  const blocked = dp.blocked;
+  // 少下高速模式：在 DP 结果上做有界「顺路补点」，把真正顺路的服务区/出口也用上
+  const baseList = dp.list;
+  const refined = (mode === 'highway' && !blocked)
+    ? refineWithExits(baseList, all, totalKm, eff, maxDetour, Math.round(eff * 0.7))
+    : baseList;
+  const plan = refined.map(p => ({
+    s: p.c.s, along: p.c.along, off: p.c.off, leg: p.advance,
+    detour: p.detour, hw: p.c.hw, kind: p.c.kind, acc: p.c.acc, farHw: p.c.farHw,
+    inserted: !!p.inserted,
+  }));
+  const cur = plan.length ? plan[plan.length - 1].along : 0;
+  const finalLeg = totalKm - cur;
+  const planSet = new Set(plan.map(p => p.s.name));
+  const maxCost = plan.length ? Math.max.apply(null, plan.map(p => p.detour)) : 0;
+  const kindCount = { svc: 0, exit: 0, city: 0, road: 0 };
+  plan.forEach(p => kindCount[p.kind]++);
+  const needExitCount = kindCount.city;
+
+  // ---------- 摘要 ----------
+  const chips = plan.map((st, i) => {
+    const ac = ACCESS[st.kind] || ACCESS.road;
+    // 远郊高速站（名字带高速但不在主线上）：保留"高速出口"原名 + 标注"需绕行 X km"，
+    // 不让它伪装成顺路出口误导用户
+    const acDisp = st.farHw ? (ACCESS[st.acc] || ACCESS.exit) : ac;
+    return '<span class="route-step"><span class="route-dot" style="background:' + ac.color + '"></span>' +
+      (i + 1) + '. ' + st.s.name +
+      '<span class="text-gray-500 text-xs"> · ' + st.along.toFixed(0) + ' km 处 · 本段 ' + st.leg.toFixed(0) + ' km</span>' +
+      '<span class="text-xs" style="color:' + acDisp.color + '"> · ' + acDisp.label + '</span>' +
+      (st.farHw ? '<span class="text-xs text-gray-500"> · 需绕行 ' + st.off.toFixed(0) + ' km</span>'
+                : (st.detour > 1 ? '<span class="text-gray-500 text-xs"> · 绕行 ' + st.detour.toFixed(1) + ' km</span>' : '')) +
+      (st.inserted ? '<span class="text-xs" style="color:#34d399"> · 顺路补点</span>' : '') +
+      '</span>';
+  }).join('');
+  const hrs = Math.floor(route.duration / 3600), mins = Math.round((route.duration % 3600) / 60);
+  const hwKm = route.highwayMeters ? route.highwayMeters / 1000 : 0;
+  const kindChips = [
+    kindCount.svc ? '<b style="color:' + ACCESS.svc.color + '">🛣️ 服务区 ' + kindCount.svc + '</b>' : '',
+    kindCount.exit ? '<b style="color:' + ACCESS.exit.color + '">🔀 高速出口 ' + kindCount.exit + '</b>' : '',
+    kindCount.road ? '<b style="color:' + ACCESS.road.color + '">✅ 顺路 ' + kindCount.road + '</b>' : '',
+    kindCount.city ? '<b style="color:' + ACCESS.city.color + '">⚠️ 需下高速 ' + kindCount.city + '</b>' : '',
+  ].filter(Boolean).join('　');
+  sumEl.style.display = '';
+  sumEl.innerHTML =
+    '<div class="text-xs text-gray-500 mb-1">📍 起点：<b class="text-gray-300">' + A.label + '</b>　' + A.detail +
+    '　｜　终点：<b class="text-gray-300">' + B.label + '</b>　' + B.detail + '</div>' +
+    '<div class="mb-2">🛣️ <b>' + A.label + ' → ' + B.label + '</b>　驾车 <b class="t-amber">' + totalKm.toFixed(1) +
+    '</b> km（' + (route.mock ? '本地直线模拟' : '高德实测路网') + '）　约 ' + (hrs ? hrs + ' 小时 ' : '') + mins + ' 分钟　｜　续航 ' + range +
+    ' km（留 ' + Math.round((1 - safety) * 100) + '% → 单段上限 <b class="t-amber">' + Math.round(eff) + '</b> km）</div>' +
+    (hwKm ? '<div class="mb-1 text-xs text-gray-400">其中高速路段 <b class="text-gray-200">' + hwKm.toFixed(0) +
+      ' km</b>（占全程 ' + Math.round(route.highwayRatio * 100) + '%）—— 高速上的站能不能顺路到，另算（见下）。</div>' : '') +
+    '<div class="mb-1">⭐ 推荐充电 <b class="t-amber">' + plan.length + '</b> 次　｜　策略：<b class="t-amber">' +
+    (mode === 'highway' ? '🛣️ 少下高速' : '⚡ 充电次数最少') + '</b>　｜　沿途 ±' + corridor +
+    ' km 内共 <b class="t-amber">' + cand.length + '</b> 座闪充站可选' +
+    (plan.length ? '　｜　最远实绕 <b class="' + (maxCost > 20 ? 't-orange' : 't-amber') + '">' + maxCost.toFixed(1) + '</b> km（受「最大绕行」限制）' : '') +
+    '</div>' +
+    (plan.length ? '<div class="mb-1 text-xs">' + kindChips + '</div>' : '') +
+    (needExitCount ? '<div class="mb-1 text-xs" style="color:' + ACCESS.city.color + '">⚠️ 有 ' + needExitCount +
+      ' 站位于高速外的城区，需要下高速绕进去再上高速 —— 都是这一段高速沿线没有服务区/出口站时的兜底选择，' +
+      '表里已单独标注，你可以换一个「✅ 顺路」或「🔀 出口」的站替代。</div>' : '') +
+    (plan.length ? '<div class="grid md:grid-cols-2 gap-x-6 mt-1">' + chips + '</div>' : '') +
+    (blocked
+      ? '<div class="mt-2 t-orange">⚠️ 走不通了：从上一站往前 ' + Math.round(eff) + ' km 内、绕行不超过 ' +
+        (maxDetour > 1000 ? '任意距离' : maxDetour + ' km') + ' 的范围里没有能顺路到的闪充站，剩余 <b>' + finalLeg.toFixed(1) +
+        '</b> km 无覆盖。这一段桩确实稀疏 —— 可以把「最大绕行」放宽到 50 km，或提高续航设定。</div>'
+      : '<div class="mt-2">✅ 全程可覆盖：最后一站到终点还剩 <b>' + finalLeg.toFixed(1) + '</b> km，在续航内。</div>') +
+    '<div class="text-xs text-gray-500 mt-2">🗺️ 图上看：<b style="color:#f59e0b">琥珀大圆点 + 序号</b> = 推荐充电站（按行进顺序编号）　' +
+    '<b>淡色小点</b> = 沿途备选站　<b style="color:#7dd3fc">亮蓝粗线</b> = 高速路段　<b style="color:#94a3b8">灰色细线</b> = 普通道路　' +
+    '<b style="color:#ef4444">红色图钉</b> = 起终点</div>' +
+    '<div class="text-xs text-gray-500 mt-1">绕行代价按<b>站点能不能真的顺路到</b>分级计算：' +
+    '<b style="color:' + ACCESS.svc.color + '">服务区</b>就在高速上，几乎不额外绕；' +
+    '<b style="color:' + ACCESS.exit.color + '">高速出口站</b>需出站（按 +' + PENALTY_EXIT + ' km 计）；' +
+    '<b style="color:' + ACCESS.city.color + '">城区站</b>要下高速进城再上高速（按 +' + PENALTY_CITY + ' km 计）。</div>' +
+    (mode === 'highway'
+      ? '<div class="text-xs text-gray-500 mt-1">🛣️ <b class="text-gray-300">当前策略：少下高速</b> —— 整条路做全局最优：' +
+        '<b>先让「需下高速」的次数最少</b>，次数相同才比充电次数。优先挑' +
+        '<b style="color:' + ACCESS.svc.color + '">服务区</b>／<b style="color:' + ACCESS.exit.color + '">高速出口</b>站，' +
+        '<b>不要求每次都跑满续航</b>，宁可在服务区多充一次也不下高速；' +
+        '只有某一段续航内确实没有可顺路到达的服务区/出口站时，才被迫选城区站（表内标「⚠️ 需下高速」）。</div>'
+      : '<div class="text-xs text-gray-500 mt-1">⚡ <b class="text-gray-300">当前策略：充电次数最少</b> —— 整条路做全局最优，' +
+        '直接让<b>总充电次数最少</b>（次数相同时优先绕行少的），代价是可能推荐需要下高速的城区站。</div>');
+
+  // ---------- 表格：沿途全部站 ----------
+  wrapEl.style.display = '';
+  if (!cand.length) {
+    tb.innerHTML = '<tr><td colspan="9" class="route-empty">这条路沿途 ±' + corridor +
+      ' km 内没有闪充站。把「沿途范围」调大到 20 或 40 km 试试' +
+      (plan.length ? '（注意：推荐方案里有站偏离路线较远，需要绕行）。' : '。');
+  } else {
+    tb.innerHTML = cand.map((c, i) => {
+      const star = planSet.has(c.s.name);
+      const ac = ACCESS[c.kind] || ACCESS.road;
+      const acDisp = c.farHw ? (ACCESS[c.acc] || ACCESS.exit) : ac;   // 远郊高速站：保留"高速出口"原名 + 需绕行提示
+      // 直线偏离 vs 实际绕行：差得越多，说明这个站"看着近、跑起来远"
+      const gap = c.cost - 2 * c.off;
+      const offCell = c.off.toFixed(1) +
+        (gap > 0.5 ? ' <span class="text-xs" style="color:' + ac.color + '">→' + c.cost.toFixed(0) + '</span>'
+                   : ' <span class="text-xs text-gray-600">→' + c.cost.toFixed(0) + '</span>');
+      return '<tr' + (star ? ' style="background:#f59e0b12"' : '') + '>' +
+        '<td class="text-gray-500">' + (i + 1) + '</td>' +
+        '<td><b>' + (star ? '<span class="t-amber">⭐ </span>' : '') + c.s.name + '</b></td>' +
+        '<td class="text-gray-400">' + c.s.city + '</td>' +
+        '<td class="text-gray-400 text-xs">' + (c.s.address || '') + '</td>' +
+        '<td class="text-center"><b class="' + (star ? 't-amber' : '') + '">' + c.along.toFixed(1) + '</b> km</td>' +
+        '<td class="text-center" title="' + ac.note + '">' + offCell + ' km</td>' +
+        '<td class="text-center"><span class="text-xs" style="color:' + acDisp.color + '">' + acDisp.label + '</span>' +
+        (c.farHw ? '<br/><span class="text-xs text-gray-500">需绕行 ' + c.off.toFixed(0) + ' km</span>' : '') + '</td>' +
+        '<td class="text-center"><b>' + c.s.superNum + '</b></td>' +
+        '<td class="text-center ' + (c.s.idleSuperNum > 0 ? 't-emerald' : 't-orange') + '">' + c.s.idleSuperNum + '</td></tr>';
+    }).join('');
+  }
+
+  // ---------- 地图：真实路线 ----------
+  mapEl.style.display = '';
+  if (!routeChart) routeChart = echarts.init(mapEl);
+  const line = route.polyline.map(p => [p[0], p[1]]);
+  // 高速段 / 普通路段切成不同颜色的线，一眼看出哪几段是封闭高速
+  const lineSegs = splitByHw(line, route.hw);
+  const lngs = line.map(p => p[0]), lats = line.map(p => p[1]);
+  const minLng = Math.min.apply(null, lngs), maxLng = Math.max.apply(null, lngs);
+  const minLat = Math.min.apply(null, lats), maxLat = Math.max.apply(null, lats);
+  const spanLng = Math.max(0.5, (maxLng - minLng) * 0.18);
+  const spanLat = Math.max(0.4, (maxLat - minLat) * 0.18);
+  const shown = cand.length ? cand : all.filter(c => planSet.has(c.s.name));
+  routeChart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      backgroundColor: '#111827', borderColor: '#374151', textStyle: { color: '#f3f4f6', fontSize: 12 },
+      formatter: p => (p.data && p.data.tip) ? p.data.tip : '',
+    },
+    /* 底图 = 中国地图，与上方全国大地图共用同一 geo 投影。
+       之前用的是笛卡尔 x=经度/y=纬度（等距圆柱），与中国地图投影不一致，
+       同一条路线在两处形状对不上；改用 geo 后路线严格贴合真实路网。 */
+    geo: {
+      map: 'china', roam: true,
+      boundingCoords: [[minLng - spanLng, maxLat + spanLat], [maxLng + spanLng, minLat - spanLat]],
+      scaleLimit: { min: 0.5, max: 24 },
+      itemStyle: { areaColor: '#111827', borderColor: '#374151', borderWidth: 0.6 },
+      emphasis: { itemStyle: { areaColor: '#1f2937' }, label: { show: false } },
+      label: { show: false },
+    },
+    series: [
+      /* 路线：真实驾车路径，按高速/普通道路分色（亮蓝=高速，灰=普通道路） */
+      {
+        type: 'lines', coordinateSystem: 'geo', polyline: true, silent: true, z: 8,
+        data: lineSegs.map(s => ({
+          coords: s.pts,
+          lineStyle: s.hw
+            ? { color: '#7dd3fc', width: 4, opacity: .95, shadowColor: '#3b82f6', shadowBlur: 14 }
+            : { color: '#94a3b8', width: 2.5, opacity: .8 },
+        })),
+      },
+      /* 沿途其他可选站：淡色小点做背景 */
+      {
+        type: 'scatter', coordinateSystem: 'geo', z: 3, symbolSize: 6,
+        data: shown.filter(c => !planSet.has(c.s.name)).map(c => {
+          const ac = ACCESS[c.kind] || ACCESS.road;
+          return {
+            value: [c.s.lng, c.s.lat],
+            itemStyle: { color: CATEGORY_COLOR[c.s.category] || '#10b981', opacity: .3 },
+            tip: c.s.name + '<br/>' + c.s.city + ' · ' + c.s.superNum + ' 枪<br/>距起点 ' + c.along.toFixed(1) +
+              ' km · 直线偏离 ' + c.off.toFixed(1) + ' km · 实绕 <b style="color:' + ac.color + '">' + c.cost.toFixed(0) +
+              '</b> km<br/><span style="color:' + ac.color + '">' + ac.label + '</span> · <span style="color:#9ca3af">' +
+              ac.note + '</span>',
+          };
+        }),
+      },
+      /* 推荐充电站：琥珀大点 + 序号，一眼能看到充电节奏 */
+      {
+        type: 'scatter', coordinateSystem: 'geo', z: 10, symbolSize: 24,
+        label: {
+          show: true, formatter: p => p.data.label,
+          color: '#0a0e17', fontSize: 12, fontWeight: 700,
+        },
+        itemStyle: {
+          color: '#f59e0b', borderColor: '#fff8e7', borderWidth: 2.5,
+          shadowColor: '#f59e0b', shadowBlur: 16,
+        },
+        data: plan.map((p, i) => {
+          const ac = ACCESS[p.kind] || ACCESS.road;
+          return {
+            value: [p.s.lng, p.s.lat],
+            label: String(i + 1),
+            tip: '<b style="color:#f59e0b">⭐ 第 ' + (i + 1) + ' 站</b><br/>' + p.s.name + '<br/>' + p.s.city + ' · ' +
+              p.s.superNum + ' 枪（空闲 ' + p.s.idleSuperNum + '）<br/>距起点 ' + p.along.toFixed(1) + ' km · 本段 ' +
+              p.leg.toFixed(1) + ' km· 绕行 ' + p.detour.toFixed(1) + ' km<br/><span style="color:' + ac.color + '">' +
+              ac.label + '</span> · ' + ac.note,
+          };
+        }),
+      },
+      /* 起终点 */
+      {
+        type: 'scatter', coordinateSystem: 'geo', z: 11, symbol: 'pin', symbolSize: 54,
+        itemStyle: { color: '#ef4444', shadowColor: '#ef4444', shadowBlur: 12 },
+        label: { show: true, position: 'top', color: '#f3f4f6', fontSize: 12, fontWeight: 700, formatter: p => p.data.label },
+        data: [
+          { value: [A.lng, A.lat], label: '起 ' + A.label, tip: '起点 ' + A.label + '<br/>' + A.detail },
+          { value: [B.lng, B.lat], label: '终 ' + B.label, tip: '终点 ' + B.label + '<br/>' + B.detail },
+        ],
+      },
+    ],
+  }, true);
+  routeChart.resize();
+  window.addEventListener('resize', () => routeChart && routeChart.resize());
+
+  /* 叠加到上方全国大地图：轻度抽稀即可（全国尺度下 1500 点已远超像素密度），
+     抽太狠会把弯道切掉、看着"不像真路" */
+  const stride = Math.max(1, Math.ceil(route.polyline.length / 1500));
+  const overlayLine = [], overlayHw = [];
+  for (let i = 0; i < route.polyline.length; i += stride) {
+    overlayLine.push(route.polyline[i]);
+    overlayHw.push(route.hw ? (route.hw[i] ? 1 : 0) : 0);
+  }
+  const lastPt = route.polyline[route.polyline.length - 1];
+  if (overlayLine[overlayLine.length - 1] !== lastPt) {
+    overlayLine.push(lastPt);
+    overlayHw.push(route.hw ? (route.hw[route.hw.length - 1] ? 1 : 0) : 0);
+  }
+  routeOverlay = { line: overlayLine, hw: overlayHw, stops: plan, A: A, B: B, from: A.label, to: B.label };
+  if (curProv) backToNation();     // 正下钻某省就先退回全国，否则看不到路线
+  else drawMap();
+  const cb = document.getElementById('clearRouteBtn');
+  if (cb) cb.style.display = '';
+}
+
+
+</script>
+</body>
+</html>

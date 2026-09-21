@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-flashcharge.site（比亚迪闪充站数据可视化）的本地仿制站：单页深色仪表盘，含统计卡片、ECharts 全国地图（散点/热力图 + 省份下钻）、长途充电规划（动态规划算法）、城市/省份排行榜、今日新增站点等模块。
+flashcharge.site（比亚迪闪充站数据可视化）的本地仿制站：单页深色仪表盘，含统计卡片、ECharts 全国地图（散点/热力图 + 省份下钻）、长途充电规划（动态规划算法）、城市/省份排行榜、今日新增站点等模块；另自加了「比亚迪人力与薪酬」板块（员工总数、社保覆盖、高管与员工薪酬差距、生产岗与研发岗占比）。
 
 - 无构建工具、无 package.json、无测试、非 git 仓库。改动后直接在浏览器打开 http://localhost:8080 验证。
 - 站点数据为 2026-09-15 从原站下载的快照，不会自动更新。
@@ -22,6 +22,7 @@ node server.js        # http://localhost:8080（纯 Node 内置模块，零依�
 - **静态数据文件**（客户端 fetch，可独立替换）：
   - `byd_stations_full.json` — 权威站点数据（约 3MB、8000+ 站），由 `<head>` 中 `window.__dataFetch` 预取，勿内联进 HTML；
   - `prev_day.json`（昨日快照，驱动增减徽章）、`new_today.json`（今日新增）— 均可选，缺失时代码静默降级。
+  - `byd_workforce.json` — 人力与薪酬板块（`#workforce`）：员工总数 / 岗位与学历构成 / 社保覆盖 / 董监高薪酬明细 / 说明与来源。**人工录入的年报、ESG 口径，与站点数据无关、不会自动更新**。缺失时该板块显示「暂不可用」并隐藏图表。
 - **provinces/*.json**：34 个省级 GeoJSON，供地图下钻。`PROV_FILE` 映射的键**不带「省」后缀**（如 `'云南'` 而非 `'云南省'`；陕西对应文件 `shanxi1`）。用错名称会静默无效（无报错）。
 - **server.js**：静态文件服务 + 三个 API——`/api/stats`（浏览量计数，持久化到 `_stats.json`）、`/api/geocode`（站点城市中心 + 内置城市词典）、`/api/route`（高德或直线模拟）。
 
@@ -31,6 +32,7 @@ node server.js        # http://localhost:8080（纯 Node 内置模块，零依�
 - `qrcode.jpg` 是原站作者的赞赏码图片，部署前应替换；留言板由 index.html 中 `FEEDBACK.formUrl/boardUrl` 控制（为空 = 禁用，填入腾讯文档表单链接即启用）。
 - 更新数据 = 从原站重新下载 `byd_stations_full.json`、`prev_day.json`、`new_today.json` 覆盖即可，无需改代码。
 - `_stats.json` 是运行时生成的访问统计，可安全删除。
+- 人力板块的「全员人均」「倍差」是在 JS 里按 `pay.cashPaidToEmployees2025Yuan ÷ 期末员工数` 现算的，更新时只改基础数字，别在 JSON 里手填倍差；`notes` / `sources` 会原样渲染到页面，改数字时同步改说明。
 
 ## 参考文档
 

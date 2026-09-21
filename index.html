@@ -12,6 +12,7 @@
   window.__dataFetch = fetch('byd_stations_full.json');
   window.__prevFetch = fetch('prev_day.json').catch(() => null);
   window.__newFetch = fetch('new_today.json').catch(() => null);
+  window.__wfFetch = fetch('byd_workforce.json').catch(() => null);
 </script>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='28'%3E⚡%3C/text%3E%3C/svg%3E" />
 <style>
@@ -64,6 +65,11 @@
   .delta-down { color: #f87171; background: rgba(248,113,113,.12); border: 1px solid rgba(248,113,113,.3); }
   .delta-flat { color: #9ca3af; background: rgba(107,114,128,.12); border: 1px solid rgba(107,114,128,.3); }
   .modal-back { background: #1f2937cc; backdrop-filter: blur(8px); }
+  /* 人力与薪酬板块（公司年报口径） */
+  .wf-kpi { background: #0f1523; border: 1px solid #1f2937; border-radius: 0.6rem; padding: 12px; }
+  .wf-num { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; }
+  .wf-panel { background: #0f1523; border: 1px solid #1f2937; border-radius: 0.6rem; padding: 12px; }
+  .wf-note { color: #6b7280; font-size: 12px; line-height: 1.75; }
 </style>
 </head>
 <body class="min-h-screen">
@@ -81,6 +87,7 @@
     <div class="flex items-center gap-4 text-sm text-gray-400">
       <span>数据更新: <span class="t-cyan" id="dataUpdate">2026-09-15 18:08</span></span>
       <span class="hidden sm:inline" id="visitStats">浏览量: <span class="t-amber">--</span> · 访客: <span class="t-amber">--</span></span>
+      <a class="hidden md:inline px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20" href="#workforce">人力与薪酬</a>
       <a class="px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20" href="#feedback">✍️ 留言建议</a>
       <a class="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20" href="#sponsor">☕ 支持作者</a>
     </div>
@@ -264,6 +271,53 @@
   </div>
 </div>
 
+<!-- 比亚迪人力与薪酬：公司年报 / ESG 口径，数据来自 byd_workforce.json（与站点数据无关） -->
+<div class="card p-4 scroll-mt-20" id="workforce">
+  <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+    <h3 class="font-medium">比亚迪人力与薪酬 <span class="text-xs text-gray-500 ml-2" id="wfBadge">加载中…</span></h3>
+    <span class="text-xs text-gray-500" id="wfAsOf"></span>
+  </div>
+  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" id="wfKpis"></div>
+
+  <div class="grid md:grid-cols-2 gap-4 mt-4">
+    <div class="wf-panel">
+      <div class="text-sm font-medium mb-1">员工总数（年度）</div>
+      <div class="text-xs text-gray-500 mb-2" id="wfHeadDesc">年报「在职员工总数」</div>
+      <div id="wfHeadChart" style="width:100%;height:260px"></div>
+    </div>
+    <div class="wf-panel">
+      <div class="text-sm font-medium mb-1">岗位构成：一线生产 vs 研发技术</div>
+      <div class="text-xs text-gray-500 mb-2" id="wfJobDesc">年报「按专业构成」分类</div>
+      <div id="wfJobChart" style="width:100%;height:260px"></div>
+    </div>
+    <div class="wf-panel">
+      <div class="text-sm font-medium mb-1">学历结构</div>
+      <div class="text-xs text-gray-500 mb-2" id="wfEduDesc">年报「按教育程度」分类</div>
+      <div id="wfEduChart" style="width:100%;height:260px"></div>
+    </div>
+    <div class="wf-panel">
+      <div class="text-sm font-medium mb-1">薪酬梯度（横轴为对数刻度）</div>
+      <div class="text-xs text-gray-500 mb-2" id="wfPayDesc">倍差由公开数字推算，非公司官方披露</div>
+      <div id="wfPayChart" style="width:100%;height:260px"></div>
+    </div>
+  </div>
+
+  <div class="mt-4">
+    <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+      <div class="text-sm font-medium">董监高薪酬明细 <span class="text-xs text-gray-500 ml-2" id="wfBoardSub">2025 年 · 税前</span></div>
+      <span class="text-xs text-gray-500">末列 = 年薪酬 ÷ 全员人均用工成本</span>
+    </div>
+    <div class="overflow-x-auto max-h-[300px] overflow-y-auto">
+      <table class="tbl">
+        <thead><tr><th style="width:50px">#</th><th>姓名</th><th>职务</th><th class="text-center">年薪酬（万元）</th><th class="text-center">÷ 全员人均</th></tr></thead>
+        <tbody id="wfBoardTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="wf-note mt-4" id="wfNotes"></div>
+</div>
+
 <!-- 支持作者：赞赏码 -->
 <div id="sponsor" class="card p-6 scroll-mt-20">
   <div class="grid md:grid-cols-[1fr_auto] gap-6 items-center">
@@ -409,9 +463,14 @@ async function init() {
     const r3 = await (window.__newFetch || fetch('new_today.json'));
     if (r3 && r3.ok) NEW_TODAY = await r3.json();
   } catch (e) { /* 新增站点文件不存在时静默跳过 */ }
+  try {
+    const r4 = await (window.__wfFetch || fetch('byd_workforce.json'));
+    if (r4 && r4.ok) WORKFORCE = await r4.json();
+  } catch (e) { /* 人力数据文件不存在时静默跳过 */ }
   buildStats();
   buildTables();
   renderNewToday();
+  renderWorkforce();
   drawAll();
 }
 
@@ -728,6 +787,167 @@ function renderNewToday() {
       <td class="text-center"><b>${s.superNum || 0}</b></td></tr>`;
   }).join('');
 }
+/* ========== 比亚迪人力与薪酬 ==========
+ * 数据来自 byd_workforce.json（人工录入的年报 / ESG 口径，与站点数据无关）。
+ * 文件缺失时静默降级为「暂不可用」，不影响站点相关模块。
+ */
+let WORKFORCE = null;
+const WF_CHARTS = [];
+const wfInt = n => Number(n).toLocaleString('zh-CN');
+const wfWan = n => (n / 10000).toFixed(1);              // 人 → 万人
+const wfW = (n, d) => Number(n).toFixed(d == null ? 1 : d);
+const wfAmt = n => Number(Number(n).toFixed(2)).toLocaleString('zh-CN');   // 金额：最多两位小数
+
+function renderWorkforce() {
+  const badge = document.getElementById('wfBadge');
+  if (!badge) return;
+  const chartIds = ['wfHeadChart', 'wfJobChart', 'wfEduChart', 'wfPayChart'];
+  if (!WORKFORCE || !WORKFORCE.headcount || !WORKFORCE.pay) {
+    badge.textContent = '暂不可用';
+    chartIds.forEach(id => { const el = document.getElementById(id); if (el) el.closest('.wf-panel').style.display = 'none'; });
+    document.getElementById('wfBoardTbody').innerHTML = '<tr><td colspan="5" class="route-empty">未找到 byd_workforce.json，人力模块已隐藏。</td></tr>';
+    document.getElementById('wfNotes').innerHTML = '把年报口径的数字填入 byd_workforce.json 即可自动展示（字段结构见该文件）。';
+    return;
+  }
+
+  const hs = WORKFORCE.headcount.series || [];
+  const last = hs[hs.length - 1], prev = hs[hs.length - 2];
+  const jobs = (WORKFORCE.jobs && WORKFORCE.jobs.items) || [];
+  const edu = (WORKFORCE.education && WORKFORCE.education.items) || [];
+  const pay = WORKFORCE.pay, emp = pay.employee || {};
+  const inj = (WORKFORCE.social && WORKFORCE.social.injury2024) || { covered: 0, spendYuan: 0 };
+  const totalJobs = jobs.reduce((a, j) => a + j.n, 0) || last.total;
+  const prod = jobs.find(j => j.key === 'production') || { n: 0 };
+  const rd = jobs.find(j => j.key === 'rd') || { n: 0 };
+  const lowEdu = edu.find(e => e.label.indexOf('大专') === 0) || { n: 0 };
+  const execAvg = pay.execTotalWan / pay.execCount;                     // 董监高人均，万元
+  const avg = pay.cashPaidToEmployees2025Yuan / last.total / 10000;     // 全员人均用工成本，万元
+  const top = pay.people[0];
+  const chairman = pay.people.find(p => p.name === '王传福') || top;
+  const frontline = emp.frontlineAnnualMidWan || 7.2;
+
+  badge.textContent = `年报口径 · 截至 ${WORKFORCE.meta.asOf}`;
+  document.getElementById('wfAsOf').textContent = WORKFORCE.meta.report || '';
+
+  const dHead = last.total - prev.total;
+  document.getElementById('wfKpis').innerHTML = [
+    { t: `员工总数（${last.year} 末）`, v: wfInt(last.total), u: ' 人', c: 't-amber',
+      s: `较 ${prev.year} 年 <b class="t-orange">${dHead < 0 ? '−' : '+'}${wfInt(Math.abs(dHead))}</b> 人（${wfW(dHead / prev.total * 100)}%）` },
+    { t: '社保覆盖率（正式员工）', v: '100', u: '%', c: 't-emerald',
+      s: `2024 年工伤险覆盖 <b>${wfInt(inj.covered)}</b> 人 · 投入 ${wfW(inj.spendYuan / 100000000, 2)} 亿元` },
+    { t: '全员人均用工成本', v: wfW(avg), u: ' 万元/年', c: 't-cyan',
+      s: `含公司承担的社保公积金 · 媒体口径 ${wfW(emp.avgPerHeadMedia2025Wan, 2)} 万元` },
+    { t: '董监高人均薪酬', v: wfW(execAvg), u: ' 万元/年', c: 't-amber',
+      s: `${pay.execCount} 人合计 ${wfInt(pay.execTotalWan)} 万元 · 占全部用工支出 ${wfW(pay.execTotalWan / (pay.cashPaidToEmployees2025Yuan / 10000) * 100, 2)}%` },
+    { t: '最高 ÷ 全员人均', v: wfW(top.payWan / avg, 0), u: ' 倍', c: 't-orange',
+      s: `${top.name}（${top.title}）${wfInt(top.payWan)} 万元/年` },
+    { t: '一线生产岗占比', v: wfW(prod.n / totalJobs * 100), u: '%', c: 't-amber',
+      s: `研发技术人员 <b class="t-cyan">${wfW(rd.n / totalJobs * 100)}%</b> · 大专及以下 <b>${wfW(lowEdu.n / totalJobs * 100)}%</b>` },
+  ].map(k => `<div class="wf-kpi"><div class="text-xs text-gray-400">${k.t}</div>
+      <div class="wf-num ${k.c}">${k.v}<span class="text-xs text-gray-500 font-normal">${k.u}</span></div>
+      <div class="text-xs text-gray-500 mt-1">${k.s}</div></div>`).join('');
+
+  document.getElementById('wfBoardSub').textContent =
+    `2025 年 · 税前 · ${pay.execCount} 人合计 ${wfInt(pay.execTotalWan)} 万元`;
+  document.getElementById('wfBoardTbody').innerHTML = pay.people.map((p, i) => {
+    const medal = i < 3 ? `<span class="medal medal-${i + 1}">${['🥇', '🥈', '🥉'][i]}</span>` : `<span class="text-gray-500">${i + 1}</span>`;
+    return `<tr><td>${medal}</td><td><b>${p.name}</b></td><td class="text-gray-400">${p.title}</td>
+      <td class="text-center"><b class="${i < 3 ? 't-amber' : 'text-gray-100'}">${p.payWan.toFixed(2)}</b></td>
+      <td class="text-center text-gray-400">${(p.payWan / avg).toFixed(0)} 倍</td></tr>`;
+  }).join('');
+
+  const src = (WORKFORCE.sources || []).map(s => s.url
+    ? `<a class="t-cyan underline" href="${s.url}" target="_blank" rel="noopener">${s.label}</a>` : s.label).join(' · ');
+  document.getElementById('wfNotes').innerHTML =
+    (WORKFORCE.notes || []).map(t => `· ${t}`).join('<br />')
+    + (src ? `<br /><span style="color:#4b5563">数据来源：</span>${src}` : '');
+
+  drawWorkforce(hs, jobs, totalJobs, edu, { pay, execAvg, avg, top, chairman, frontline });
+}
+
+function drawWorkforce(hs, jobs, totalJobs, edu, ctx) {
+  const catAxis = {
+    axisLine: { lineStyle: { color: '#374151' } }, axisTick: { show: false },
+    axisLabel: { color: '#f3f4f6', fontSize: 12 },
+  };
+
+  // 员工总数（年度柱状）
+  WF_CHARTS[0] = echarts.init(document.getElementById('wfHeadChart'));
+  WF_CHARTS[0].setOption({
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' },
+      formatter: p => `${p[0].name} 末在职员工 <b>${wfInt(p[0].value)}</b> 人${hs[p[0].dataIndex].est ? '<br/>（该年为按同比反推值）' : ''}` },
+    grid: { left: 62, right: 18, top: 34, bottom: 24 },
+    xAxis: { type: 'category', data: hs.map(h => h.year + ' 末'), axisLine: { lineStyle: { color: '#374151' } }, axisTick: { show: false }, axisLabel: { color: '#9ca3af' } },
+    yAxis: { type: 'value', axisLine: { lineStyle: { color: '#374151' } }, axisTick: { show: false },
+      splitLine: { lineStyle: { color: '#1f2937' } }, axisLabel: { color: '#9ca3af', formatter: v => (v / 10000) + '万' } },
+    series: [{
+      type: 'bar', barWidth: '46%',
+      data: hs.map((h, i) => ({ value: h.total, itemStyle: { color: h.est ? '#4b5563' : (i === hs.length - 1 ? '#f59e0b' : '#374151') } })),
+      label: { show: true, position: 'top', color: '#f3f4f6', fontSize: 12, formatter: p => wfWan(p.value) + '万' },
+    }],
+  });
+
+  // 岗位构成（横向条，含占比）
+  const jd = jobs.slice().sort((a, b) => a.n - b.n);
+  WF_CHARTS[1] = echarts.init(document.getElementById('wfJobChart'));
+  WF_CHARTS[1].setOption({
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' },
+      formatter: p => { const j = jd[p[0].dataIndex];
+        return `${j.label} <b>${wfInt(j.n)}</b> 人（${wfW(j.n / totalJobs * 100)}%）${j.n2024 ? `<br/>2024 年：${wfInt(j.n2024)} 人` : ''}`; } },
+    grid: { left: 108, right: 116, top: 10, bottom: 10 },
+    xAxis: { type: 'value', show: false },
+    yAxis: Object.assign({ type: 'category', data: jd.map(j => j.label) }, catAxis),
+    series: [{
+      type: 'bar', barWidth: '52%',
+      data: jd.map(j => ({ value: j.n, itemStyle: { color: j.color } })),
+      label: { show: true, position: 'right', color: '#9ca3af', fontSize: 12,
+        formatter: p => `${wfWan(p.value)}万 · ${wfW(p.value / totalJobs * 100)}%` },
+    }],
+  });
+
+  // 学历结构（环形）
+  WF_CHARTS[2] = echarts.init(document.getElementById('wfEduChart'));
+  WF_CHARTS[2].setOption({
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'item', formatter: p => `${p.name}：${wfInt(p.value)} 人（${p.percent}%）` },
+    legend: { bottom: 0, textStyle: { color: '#9ca3af' } },
+    series: [{
+      type: 'pie', radius: ['48%', '72%'], center: ['50%', '44%'],
+      itemStyle: { borderColor: '#0a0e17', borderWidth: 2 },
+      label: { color: '#f3f4f6', fontSize: 12, formatter: '{b}\n{d}%' },
+      data: edu.map(e => ({ value: e.n, name: e.label, itemStyle: { color: e.color } })),
+    }],
+  });
+
+  // 薪酬梯度（对数轴，跨越两个数量级）
+  const bars = [
+    { label: '一线普工（估算）', v: ctx.frontline, c: '#6b7280' },
+    { label: '全员人均', v: ctx.avg, c: '#10b981' },
+    { label: '研发人均（2024）', v: ctx.pay.employee.rdAvg2024Wan || ctx.avg * 1.7, c: '#06b6d4' },
+    { label: '董监高人均', v: ctx.execAvg, c: '#f59e0b' },
+    { label: `董事长 ${ctx.chairman.name}`, v: ctx.chairman.payWan, c: '#f97316' },
+    { label: `最高 ${ctx.top.name}`, v: ctx.top.payWan, c: '#ef4444' },
+  ];
+  WF_CHARTS[3] = echarts.init(document.getElementById('wfPayChart'));
+  WF_CHARTS[3].setOption({
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' },
+      formatter: p => { const b = bars[p[0].dataIndex];
+        return `${b.label} <b>${wfAmt(b.v)}</b> 万元/年<br/>相当于全员人均的 ${wfW(b.v / ctx.avg, 2)} 倍`; } },
+    grid: { left: 108, right: 128, top: 10, bottom: 10 },
+    xAxis: { type: 'log', min: 1, max: 3000, show: false },
+    yAxis: Object.assign({ type: 'category', data: bars.map(b => b.label) }, catAxis),
+    series: [{
+      type: 'bar', barWidth: '52%',
+      data: bars.map(b => ({ value: b.v, itemStyle: { color: b.c } })),
+      label: { show: true, position: 'right', color: '#9ca3af', fontSize: 12,
+        formatter: p => `${wfAmt(p.value)} 万 · ×${wfW(p.value / ctx.avg, 2)}` },
+    }],
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const si = document.getElementById('detailSearch');
   if (si) si.addEventListener('input', renderDetail);
@@ -946,7 +1166,10 @@ function drawAll() {
 const boot = () => init().then(() => { drawMap(); renderDetail(); });
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();
-window.addEventListener('resize', () => mapChart && mapChart.resize());
+window.addEventListener('resize', () => {
+  mapChart && mapChart.resize();
+  WF_CHARTS.forEach(c => c && c.resize());
+});
 function dismissWelcome() { document.getElementById('modal').remove(); }
 
 /* ========== 长途充电规划 ========== */

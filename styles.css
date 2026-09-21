@@ -11,6 +11,13 @@
 .text-gray-600{--tw-text-opacity:1;color:rgb(75 85 99/var(--tw-text-opacity,1))}
 .gap-x-6{-moz-column-gap:1.5rem;column-gap:1.5rem}
 .max-h-\[420px\]{max-height:420px}
+/* ===== 补充：人力与薪酬板块新增的工具类 ===== */
+.mt-4{margin-top:1rem}
+.max-h-\[300px\]{max-height:300px}
+.text-emerald-400{--tw-text-opacity:1;color:rgb(52 211 153/var(--tw-text-opacity,1))}
+.bg-emerald-500\/10{background-color:rgba(16,185,129,.1)}
+.border-emerald-500\/30{border-color:rgba(16,185,129,.3)}
+.hover\:bg-emerald-500\/20:hover{background-color:rgba(16,185,129,.2)}
 @media (min-width:768px){
   .md\:w-auto{width:auto}
   .md\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}

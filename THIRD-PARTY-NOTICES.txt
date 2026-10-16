@@ -1,0 +1,36 @@
+第三方组件与许可 · THIRD-PARTY NOTICES
+更新日期：2026-09-21
+
+1) three.js r147
+   文件：assets/vendor/three/three.min.js
+   许可：MIT License（版权与许可声明保留在文件头部）
+   说明：地图与全部图表的 WebGL 渲染引擎。
+   上游：https://github.com/mrdoob/three.js
+
+2) three.js OrbitControls
+   文件：assets/vendor/three/OrbitControls.js
+   许可：MIT License（随 three.js 分发）
+   说明：地图的拖拽旋转 / 滚轮缩放 / 平移控制（经典脚本版，挂载到 THREE.OrbitControls）。
+
+3) 中国地图边界数据
+   文件：assets/geo/china.js（由根目录 china_map.js 解码而来）
+   许可：Apache License 2.0（源文件 china_map.js 头部保留原始声明）
+   说明：34 个省级行政区边界；个别边界注记引用了维基百科条目作为来源说明，
+   属数据注释，不是运行时外链。
+
+4) JetBrains Mono
+   文件：assets/fonts/jetbrains-mono-*.woff2
+   许可：SIL Open Font License 1.1，全文见 assets/fonts/OFL.txt
+   说明：仅使用拉丁与拉丁扩展子集，用于页面内的数字与标识符。
+
+5) 站点与路线数据
+   文件：assets/js/data/*.js
+   说明：站点清单、昨日快照与今日新增由公开渠道整理，仅供参考，不保证实时与准确；
+   路线数据为高德地图驾车路线规划结果，仅用于离线演示。
+
+6) Apache ECharts 5（仅旧版深色页面使用）
+   文件：echarts.min.js（仓库根目录，被 index-dark.html 引用）
+   许可：Apache License 2.0（版权与许可声明保留在文件头部）
+   协议全文：https://www.apache.org/licenses/LICENSE-2.0
+
+本包不含任何统计、追踪或广告脚本，运行时也不请求任何第三方域名。
